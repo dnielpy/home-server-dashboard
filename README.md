@@ -25,6 +25,7 @@ The sidebar also has a module per app, with the pages that app's own web app had
 | Module | Pages | Read from |
 |---|---|---|
 | **Energy** | Live (power flow of the latest reading), Battery (battery level, AC output, runtime estimate), Blackouts (power status and the longest blackouts and periods with power) | Bluetti API |
+| **Network** | Live (connection chain and the Nano's download speed every second), Speed test (fast.com), Local speed (from the browser to this server), Stats (connection status, online/offline per day, top devices, bandwidth, outages), Devices (live list with block, limit and rename, and each device's history) | Home Net API |
 
 ## Structure
 
@@ -38,7 +39,7 @@ turbo.json   Task runner config (Turborepo)
 
 The browser only talks to the web app; the web app calls this API from the server, and the API calls the other apps
 and the agent. The module pages are the exception: the web app reads them straight from each app's API
-(`BLUETTI_API_URL`), as that app's own web app did.
+(`BLUETTI_API_URL`, `HOMENET_API_URL`), as that app's own web app did.
 When one of them is down only its cards show an error.
 
 ## Requirements
@@ -58,7 +59,7 @@ cd apps/api && uv sync && cd ../..
 
 In `apps/api/.env` point `BLUETTI_API_URL`, `HOMENET_API_URL` and `LOCALTUBE_API_URL` at the other apps, and set
 `LOCALTUBE_SERVICE_TOKEN` to the `SERVICE_TOKEN` configured in LocalTube's API. In `apps/web/.env.local` point
-`BLUETTI_API_URL` at the Bluetti API too.
+`BLUETTI_API_URL` and `HOMENET_API_URL` at the Bluetti and Home Net APIs too.
 
 ## Development
 

@@ -236,6 +236,173 @@ body {
   animation: comet-travel var(--comet-duration, 12s) linear infinite;
 }
 
+/* Network connection chain: a burst behind a hop when its pings come back */
+@keyframes hop-flash {
+  0% {
+    opacity: 0.75;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+}
+.hop-flash {
+  background: radial-gradient(circle, rgb(16 185 129) 0%, rgb(16 185 129 / 0.45) 45%, transparent 70%);
+  animation: hop-flash 0.9s ease-out both;
+}
+
+/* A green glow on the "Online" headline when a sweep reaches internet */
+@keyframes text-flash {
+  0% {
+    color: rgb(16 185 129);
+    text-shadow:
+      0 0 12px rgb(16 185 129 / 0.9),
+      0 0 28px rgb(16 185 129 / 0.6);
+  }
+  100% {
+    color: inherit;
+    text-shadow: 0 0 0 transparent;
+  }
+}
+.text-flash {
+  animation: text-flash 1.4s ease-out both;
+}
+
+@keyframes hop-pinging {
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+.hop-pinging {
+  animation: hop-pinging 1s ease-out infinite;
+}
+
+/* Fills the link to the next hop while it is pinged: downward on phones, left to right from md up */
+@keyframes link-progress {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes link-progress-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.link-progress {
+  transform-origin: top;
+  animation: link-progress 3s linear both;
+}
+
+/* Moving stripes on a link that carries traffic */
+@keyframes link-flow {
+  to {
+    background-position: 0 24px;
+  }
+}
+@keyframes link-flow-x {
+  to {
+    background-position: 24px 0;
+  }
+}
+.link-flow {
+  background-image: repeating-linear-gradient(180deg, rgb(255 255 255 / 0.55) 0 8px, transparent 8px 24px);
+  animation: link-flow 1.2s linear infinite;
+}
+@media (min-width: 48rem) {
+  .link-flow {
+    background-image: repeating-linear-gradient(90deg, rgb(255 255 255 / 0.55) 0 8px, transparent 8px 24px);
+    animation-name: link-flow-x;
+  }
+  .link-progress {
+    transform-origin: left;
+    animation-name: link-progress-x;
+  }
+}
+
+/* The "Connected" ball: grows in from the chain, then glows, ripples and floats while it is shown */
+@keyframes connected-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.connected-enter {
+  animation: connected-enter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes connected-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 16px rgb(16 185 129 / 0.45),
+      0 0 40px rgb(16 185 129 / 0.25);
+  }
+  50% {
+    box-shadow:
+      0 0 32px rgb(16 185 129 / 0.9),
+      0 0 80px rgb(16 185 129 / 0.55);
+  }
+}
+.connected-glow {
+  animation: connected-glow 2s ease-in-out infinite;
+}
+@keyframes connected-ripple {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+.connected-ripple {
+  animation: connected-ripple 2s ease-out infinite;
+}
+@keyframes connected-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-5px) rotate(-1.5deg);
+  }
+  75% {
+    transform: translateY(2px) rotate(1.5deg);
+  }
+}
+.connected-float {
+  animation: connected-float 5s ease-in-out infinite;
+}
+@keyframes connected-shine {
+  0% {
+    transform: translateX(-120%) skewX(-20deg);
+  }
+  45%,
+  100% {
+    transform: translateX(120%) skewX(-20deg);
+  }
+}
+.connected-shine {
+  background: linear-gradient(90deg, transparent 20%, rgb(255 255 255 / 0.7) 50%, transparent 80%);
+  animation: connected-shine 2.4s ease-in-out infinite;
+}
+
 /* Recharts: no focus outline on the chart surface, the tooltip already shows what is selected */
 .recharts-wrapper,
 .recharts-surface {
@@ -246,10 +413,21 @@ body {
   .aurora span,
   .shimmer::after,
   .pulse-dot::after,
-  .flow-line {
+  .flow-line,
+  .link-flow,
+  .hop-pinging,
+  .connected-glow,
+  .connected-ripple,
+  .connected-float {
     animation: none;
   }
-  .comet {
+  .comet,
+  .connected-shine {
     display: none;
+  }
+  .connected-enter,
+  .hop-flash,
+  .text-flash {
+    animation-duration: 0.01s;
   }
 }
