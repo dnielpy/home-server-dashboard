@@ -52,15 +52,18 @@ export function StatusTile({
   return (
     <div
       title={status?.detail ?? undefined}
-      className={`glass glass-glow ${style.accent} flex min-h-36 flex-col justify-between gap-3 rounded-2xl p-3.5 sm:aspect-square sm:min-h-0 ${style.border}`}
+      className={`glass glass-glow ${style.accent} relative flex min-h-44 flex-col gap-3 rounded-2xl p-3.5 sm:aspect-square sm:min-h-0 ${style.border}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${style.icon}`}>
-          <Icon className="h-5 w-5" />
-        </span>
-        <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-px text-[11px] font-medium ${style.pill}`}>
-          {status?.state !== "idle" && <span aria-hidden className="pulse-dot h-1.5 w-1.5" />}
-          {style.label}
+      <span
+        className={`absolute top-3.5 right-3.5 inline-flex items-center gap-1.5 rounded-full px-2 py-px text-[11px] font-medium ${style.pill}`}
+      >
+        {status?.state !== "idle" && <span aria-hidden className="pulse-dot h-1.5 w-1.5" />}
+        {style.label}
+      </span>
+      {/* The icon sits in the middle of the space left above the name */}
+      <div className="flex flex-1 items-center justify-center pt-5">
+        <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${style.icon}`}>
+          <Icon className="h-7 w-7" />
         </span>
       </div>
       <div className="min-w-0">
