@@ -4,7 +4,7 @@ from urllib.parse import quote
 from fastapi import HTTPException
 
 from app.clients.upstream import Upstream, UpstreamError
-from app.schemas import AgentInfoOut, ProjectDetailOut, ProjectOut, UpdateJobOut
+from app.schemas import AgentInfoOut, ProjectDetailOut, ProjectOut, SystemOut, SystemTrafficOut, UpdateJobOut
 
 # The agent's answers for a project that does not exist or an update that cannot start or stop now
 PASSED_THROUGH = {404, 409}
@@ -53,3 +53,11 @@ async def update(upstream: Upstream, name: str, offset: int) -> UpdateJobOut:
 
 async def cancel_update(upstream: Upstream, name: str) -> UpdateJobOut:
     return UpdateJobOut.model_validate(await _call(upstream, "POST", f"{_project(name)}/update/cancel"))
+
+
+async def system(upstream: Upstream) -> SystemOut:
+    return SystemOut.model_validate(await _call(upstream, "GET", "/system"))
+
+
+async def system_traffic(upstream: Upstream) -> SystemTrafficOut:
+    return SystemTrafficOut.model_validate(await _call(upstream, "GET", "/system/traffic"))

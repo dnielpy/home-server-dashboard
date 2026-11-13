@@ -3,9 +3,11 @@
 
 Does what home-server.sh does: lists the folders with a git repo next to the dashboard's, compares them with GitHub
 and updates and redeploys them with their own scripts/update.sh. It also tells whether each one's containers are
-running and since when. Only uses the standard library, so it runs with the python3 of the host.
+running and since when, and the server's CPU, memory, disks and network (metrics.py). Only uses the standard library,
+so it runs with the python3 of the host.
 
-Usage: python3 agent.py   (ROOT, AGENT_PORT and STATE_DIR can be set in the environment)
+Usage: python3 agent.py   (ROOT, AGENT_PORT, STATE_DIR, SYSTEM_DISK_MOUNT and EXTERNAL_DISK_MOUNT can be set in the
+environment)
 """
 
 from __future__ import annotations
@@ -24,6 +26,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
+
+import metrics
 
 # The folder the projects live in: the one this repo was cloned into (apps/agent/agent.py -> ../../..)
 ROOT = os.path.abspath(os.environ.get("ROOT") or Path(__file__).resolve().parents[3])
@@ -519,6 +523,26 @@ def _health(query):
     return {"status": "ok"}
 
 
+# Started by main(), so importing the agent in the tests does not sample the machine running them
+MONITOR: metrics.Monitor | None = None
+
+
+def require_monitor() -> metrics.Monitor:
+    if MONITOR is None:
+        raise HttpError(503, "The agent is not sampling the server")
+    return MONITOR
+
+
+@route("GET", "/system")
+def _system(query):
+    return require_monitor().current()
+
+
+@route("GET", "/system/traffic")
+def _system_traffic(query):
+    return require_monitor().traffic()
+
+
 @route("GET", "/info")
 def _info(query):
     return info()
@@ -606,7 +630,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    global MONITOR
     STATE_DIR.mkdir(parents=True, exist_ok=True)
+    MONITOR = metrics.Monitor(STATE_DIR / "metrics.sqlite3")
+    MONITOR.start()
     for name in project_names():
         FETCHES.start(name)
         JOBS.get(name)

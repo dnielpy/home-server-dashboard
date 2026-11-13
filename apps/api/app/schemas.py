@@ -115,6 +115,58 @@ class LocalTubeOut(BaseModel):
     watch_time: list[WatchTimeOut]
 
 
+# The server itself, as the agent reads it from /proc and the filesystems
+
+
+class MemoryOut(BaseModel):
+    total_bytes: int
+    used_bytes: int
+    available_bytes: int
+    percent: float
+
+
+class DiskOut(BaseModel):
+    name: Literal["system", "external"]
+    mount: str
+    total_bytes: int
+    used_bytes: int
+    available_bytes: int
+    percent: float
+
+
+class SystemNetworkOut(BaseModel):
+    # The interface of the default route; None away from Linux
+    interface: str | None
+    # Over the last 5 seconds; None until the agent has two readings to compare
+    rx_bytes_per_second: float | None
+    tx_bytes_per_second: float | None
+    # Since the agent started counting, across reboots of the server
+    total_rx_bytes: int
+    total_tx_bytes: int
+
+
+class TrafficPointOut(BaseModel):
+    at: datetime
+    rx_bytes_per_second: float | None
+    tx_bytes_per_second: float | None
+
+
+class SystemOut(BaseModel):
+    updated_at: datetime
+    # Over the last 5 seconds; None until the agent has two readings to compare
+    cpu_percent: float | None
+    # None away from Linux, where there is no /proc/meminfo
+    memory: MemoryOut | None
+    # The system disk, and the external one while it is mounted
+    disks: list[DiskOut]
+    network: SystemNetworkOut
+
+
+class SystemTrafficOut(BaseModel):
+    interval_minutes: int
+    points: list[TrafficPointOut]
+
+
 # Management: the projects on the server and their updates, as the agent reports them. Times as Unix seconds.
 
 FetchState = Literal["pending", "ok", "err", "noup"]

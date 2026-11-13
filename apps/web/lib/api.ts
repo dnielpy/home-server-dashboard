@@ -138,11 +138,47 @@ export type LocalTube = {
   watch_time: WatchTime[];
 };
 
+export type Disk = {
+  name: "system" | "external";
+  mount: string;
+  total_bytes: number;
+  used_bytes: number;
+  available_bytes: number;
+  percent: number;
+};
+
+export type TrafficPoint = {
+  at: string;
+  rx_bytes_per_second: number | null;
+  tx_bytes_per_second: number | null;
+};
+
+export type System = {
+  updated_at: string;
+  cpu_percent: number | null;
+  /** Null away from Linux, where there is no /proc/meminfo. */
+  memory: { total_bytes: number; used_bytes: number; available_bytes: number; percent: number } | null;
+  disks: Disk[];
+  network: {
+    interface: string | null;
+    rx_bytes_per_second: number | null;
+    tx_bytes_per_second: number | null;
+    total_rx_bytes: number;
+    total_tx_bytes: number;
+  };
+};
+
+export type SystemTraffic = {
+  interval_minutes: number;
+  points: TrafficPoint[];
+};
+
 // Two cards read each of these; cache() makes them share one request per render
 export const getPower = cache(() => getJson<Power>("/dashboard/power"));
 export const getBattery = cache(() => getJson<Battery>("/dashboard/battery"));
 export const getNetworkUsage = cache(() => getJson<NetworkUsage>("/dashboard/network/usage"));
 export const getLocalTube = cache(() => getJson<LocalTube>("/dashboard/localtube"));
+export const getSystem = cache(() => getJson<System>("/dashboard/system"));
 
 export function getStatus(): Promise<SourceStatus[]> {
   return getJson<SourceStatus[]>("/dashboard/status");
@@ -154,6 +190,10 @@ export function getBatteryHistory(): Promise<BatteryHistory> {
 
 export function getSpeedTest(): Promise<SpeedTest | null> {
   return getJson<SpeedTest | null>("/dashboard/network/speed-test");
+}
+
+export function getSystemTraffic(): Promise<SystemTraffic> {
+  return getJson<SystemTraffic>("/dashboard/system/traffic");
 }
 
 export function getNetworkSpeed(): Promise<NetworkSpeed> {

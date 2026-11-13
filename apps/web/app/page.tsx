@@ -6,9 +6,14 @@ import { BatteryCard } from "@/components/dashboard/battery-card";
 import { BatteryEtaCard } from "@/components/dashboard/battery-eta-card";
 import { BatteryHistoryCard } from "@/components/dashboard/battery-history-card";
 import { CardSkeleton } from "@/components/dashboard/card";
+import { CpuCard } from "@/components/dashboard/cpu-card";
+import { DisksCard } from "@/components/dashboard/disks-card";
 import { DownloadsCard } from "@/components/dashboard/downloads-card";
+import { MemoryCard } from "@/components/dashboard/memory-card";
 import { NetworkSpeedCard } from "@/components/dashboard/network-speed-card";
 import { PowerCard } from "@/components/dashboard/power-card";
+import { ServerTrafficCard } from "@/components/dashboard/server-traffic-card";
+import { ServerTrafficHistoryCard } from "@/components/dashboard/server-traffic-history-card";
 import { TopDeviceCard } from "@/components/dashboard/top-device-card";
 import { WatchTimeCard } from "@/components/dashboard/watch-time-card";
 import { LiveClock } from "@/components/hero/live-clock";
@@ -82,6 +87,24 @@ export default function Dashboard() {
         </Slot>
         <Slot index={9} className="md:col-span-3 xl:col-span-6">
           <WatchTimeCard />
+        </Slot>
+      </Section>
+
+      <Section title="Server">
+        <Slot index={10} className="md:col-span-3 xl:col-span-3">
+          <CpuCard />
+        </Slot>
+        <Slot index={11} className="md:col-span-3 xl:col-span-3">
+          <MemoryCard />
+        </Slot>
+        <Slot index={12} className="md:col-span-6 xl:col-span-6">
+          <DisksCard />
+        </Slot>
+        <Slot index={13} className="md:col-span-6 xl:col-span-4">
+          <ServerTrafficCard />
+        </Slot>
+        <Slot index={14} className="md:col-span-6 xl:col-span-8 [&_section]:min-h-72">
+          <ServerTrafficHistoryCard />
         </Slot>
       </Section>
 

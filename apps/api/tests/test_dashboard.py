@@ -238,3 +238,73 @@ def test_status_keeps_since_until_the_state_changes() -> None:
 
     tracker.record("bluetti", False, "refused", third)
     assert (tracker.states["bluetti"].up, tracker.states["bluetti"].since) == (False, third)
+
+
+SYSTEM = {
+    "updated_at": "2026-11-13T12:00:00+00:00",
+    "cpu_percent": 12.5,
+    "memory": {"total_bytes": 8_000, "used_bytes": 2_000, "available_bytes": 6_000, "percent": 25.0},
+    "disks": [
+        {
+            "name": "system",
+            "mount": "/",
+            "total_bytes": 1_000,
+            "used_bytes": 400,
+            "available_bytes": 600,
+            "percent": 40.0,
+        }
+    ],
+    "network": {
+        "interface": "eth0",
+        "rx_bytes_per_second": 1_250.5,
+        "tx_bytes_per_second": None,
+        "total_rx_bytes": 9_000_000,
+        "total_tx_bytes": 1_000_000,
+    },
+}
+
+
+def test_system(client, upstreams) -> None:
+    upstreams(agent={"/system": SYSTEM})
+
+    body = client.get("/dashboard/system").json()
+
+    assert body["cpu_percent"] == 12.5
+    assert body["memory"]["percent"] == 25
+    assert [disk["name"] for disk in body["disks"]] == ["system"]
+    assert (body["network"]["rx_bytes_per_second"], body["network"]["total_rx_bytes"]) == (1_250.5, 9_000_000)
+
+
+def test_system_away_from_linux(client, upstreams) -> None:
+    upstreams(agent={"/system": {**SYSTEM, "cpu_percent": None, "memory": None}})
+
+    body = client.get("/dashboard/system").json()
+
+    assert (body["cpu_percent"], body["memory"]) == (None, None)
+
+
+def test_system_when_the_agent_is_down_is_502(client, upstreams) -> None:
+    upstreams(agent={"/system": httpx.ConnectError("refused")})
+
+    response = client.get("/dashboard/system")
+
+    assert response.status_code == 502
+    assert response.json()["source"] == "agent"
+
+
+def test_system_traffic(client, upstreams) -> None:
+    upstreams(
+        agent={
+            "/system/traffic": {
+                "interval_minutes": 15,
+                "points": [
+                    {"at": "2026-11-13T11:45:00+00:00", "rx_bytes_per_second": 2_000.0, "tx_bytes_per_second": 300.0}
+                ],
+            }
+        }
+    )
+
+    body = client.get("/dashboard/system/traffic").json()
+
+    assert body["interval_minutes"] == 15
+    assert body["points"][0]["rx_bytes_per_second"] == 2_000

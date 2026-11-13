@@ -13,6 +13,8 @@ Dashboard with the stats of every app on the home server, one card each:
 | Device that used the most bandwidth in the last 24 h | Home Net `/device-usage` |
 | Videos LocalTube is downloading | LocalTube `/api/stats/downloads/active` |
 | Hours each LocalTube profile has watched | LocalTube `/api/stats/watch-time` |
+| Server CPU, memory, disks and network right now | Agent `/system` |
+| Server network speed over the last 7 days | Agent `/system/traffic` |
 
 The **Management** page has a card per project on the server (whether its containers are running and since when)
 and an update panel, the web version of `home-server.sh`: it compares each project with GitHub, shows the commits
@@ -79,7 +81,8 @@ The web app is published on `WEB_PORT` (3020) and the API on `API_PORT` (3021).
 
 ### Agent
 
-The Management page needs the agent running on the host, as the user that owns the projects and can use Docker. Once:
+The Management page and the Server cards need the agent running on the host, as the user that owns the projects and
+can use Docker. Once:
 
 ```bash
 ./scripts/install-agent.sh            # installs and starts the home-server-agent user service
@@ -91,3 +94,8 @@ container reaches it through `host.docker.internal` (`AGENT_URL`). It has no aut
 home network. Updates run in their own process group and keep their state in `~/.local/state/home-server-agent`, so
 updating the dashboard itself works: the page reconnects when it is back. `scripts/update.sh` restarts the agent at
 the end so it runs the new code; logs with `journalctl --user -u home-server-agent`.
+
+For the Server cards it reads the host's `/proc` and its disks itself: CPU and network speed over the last 5 seconds,
+memory, the system disk (`/`) and the external one while it is mounted (`EXTERNAL_DISK_MOUNT`, `/mnt/external` by
+default). Every 5 minutes it stores the network speed and the bytes carried in `metrics.sqlite3` in its state folder,
+for the 7 day chart and totals that keep adding up across reboots.

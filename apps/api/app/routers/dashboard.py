@@ -3,7 +3,7 @@ import asyncio
 from fastapi import APIRouter
 
 from app.battery import battery_out
-from app.clients import bluetti, homenet, localtube
+from app.clients import agent, bluetti, homenet, localtube
 from app.clients.upstream import UpstreamsDep
 from app import history, status
 from app.schemas import (
@@ -18,6 +18,8 @@ from app.schemas import (
     PowerPeriodOut,
     SourceStatusOut,
     SpeedTestOut,
+    SystemOut,
+    SystemTrafficOut,
     TopDeviceOut,
     UpstreamErrorOut,
     WatchTimeOut,
@@ -151,3 +153,24 @@ async def local_tube(upstreams: UpstreamsDep) -> LocalTubeOut:
         downloading=DownloadsOut(**downloads.model_dump()),
         watch_time=[WatchTimeOut(**row.model_dump()) for row in watched],
     )
+
+
+@router.get(
+    "/system",
+    response_model=SystemOut,
+    description=(
+        "The server's CPU and network speed over the last 5 seconds, its memory and disks, and the bytes its network "
+        "interface has carried since the agent started counting (the agent on the server)."
+    ),
+)
+async def system_stats(upstreams: UpstreamsDep) -> SystemOut:
+    return await agent.system(upstreams.agent)
+
+
+@router.get(
+    "/system/traffic",
+    response_model=SystemTrafficOut,
+    description="The server's network speed over the last 7 days, averaged every 15 minutes (the agent on the server).",
+)
+async def system_traffic(upstreams: UpstreamsDep) -> SystemTrafficOut:
+    return await agent.system_traffic(upstreams.agent)
