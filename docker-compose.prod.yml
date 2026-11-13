@@ -36,8 +36,12 @@ services:
         condition: service_healthy
     environment:
       API_URL: http://api:3021
+      # The Energy pages read the Bluetti API directly, through the port it publishes on the host
+      BLUETTI_API_URL: ${BLUETTI_API_URL:-http://host.docker.internal:3001}
       # Server-rendered dates use the container's timezone
       TZ: ${TZ:-America/Havana}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${WEB_PORT:-3020}:3000"
     logging: *logging

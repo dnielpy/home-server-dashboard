@@ -1,4 +1,5 @@
-import { NAV_ITEMS } from "@/components/layout/nav-items";
+import { isGroup, NAV_ITEMS } from "@/components/layout/nav-items";
+import { SidebarGroup } from "@/components/layout/sidebar-group";
 import { SidebarLink } from "@/components/layout/sidebar-link";
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -12,14 +13,18 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         }`}
       />
       <aside
-        className={`fixed top-14 bottom-0 left-0 z-20 w-60 shrink-0 border-r border-surface-border bg-background/70 px-3 py-4 backdrop-blur-xl transition-transform md:sticky md:h-[calc(100dvh-3.5rem)] md:translate-x-0 md:bg-transparent ${
+        className={`fixed top-14 bottom-0 left-0 z-20 w-60 shrink-0 border-r border-surface-border bg-background/70 px-3 py-4 backdrop-blur-xl transition-transform md:sticky md:h-[calc(100dvh-3.5rem)] md:translate-x-0 overflow-y-auto md:bg-transparent ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <nav aria-label="Main" className="flex flex-col gap-1">
-          {NAV_ITEMS.map((item) => (
-            <SidebarLink key={item.href} item={item} onNavigate={onClose} />
-          ))}
+          {NAV_ITEMS.map((item) =>
+            isGroup(item) ? (
+              <SidebarGroup key={item.label} group={item} onNavigate={onClose} />
+            ) : (
+              <SidebarLink key={item.href} item={item} onNavigate={onClose} />
+            ),
+          )}
         </nav>
       </aside>
     </>

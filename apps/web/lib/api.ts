@@ -7,8 +7,8 @@ export class ApiUnavailableError extends Error {}
 export class SourceUnavailableError extends ApiUnavailableError {
   readonly source: string;
 
-  constructor(source: string, message: string) {
-    super(message);
+  constructor(source: string, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.source = source;
   }
 }

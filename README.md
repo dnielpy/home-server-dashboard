@@ -20,6 +20,12 @@ The **Management** page has a card per project on the server (whether its contai
 and an update panel, the web version of `home-server.sh`: it compares each project with GitHub, shows the commits
 it is missing and runs its `scripts/update.sh` to update and redeploy it, following the steps and the output live.
 
+The sidebar also has a module per app, with the pages that app's own web app had, in this dashboard's style:
+
+| Module | Pages | Read from |
+|---|---|---|
+| **Energy** | Live (power flow of the latest reading), Battery (battery level, AC output, runtime estimate), Blackouts (power status and the longest blackouts and periods with power) | Bluetti API |
+
 ## Structure
 
 ```
@@ -31,7 +37,8 @@ turbo.json   Task runner config (Turborepo)
 ```
 
 The browser only talks to the web app; the web app calls this API from the server, and the API calls the other apps
-and the agent.
+and the agent. The module pages are the exception: the web app reads them straight from each app's API
+(`BLUETTI_API_URL`), as that app's own web app did.
 When one of them is down only its cards show an error.
 
 ## Requirements
@@ -50,7 +57,8 @@ cd apps/api && uv sync && cd ../..
 ```
 
 In `apps/api/.env` point `BLUETTI_API_URL`, `HOMENET_API_URL` and `LOCALTUBE_API_URL` at the other apps, and set
-`LOCALTUBE_SERVICE_TOKEN` to the `SERVICE_TOKEN` configured in LocalTube's API.
+`LOCALTUBE_SERVICE_TOKEN` to the `SERVICE_TOKEN` configured in LocalTube's API. In `apps/web/.env.local` point
+`BLUETTI_API_URL` at the Bluetti API too.
 
 ## Development
 

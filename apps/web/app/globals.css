@@ -210,6 +210,32 @@ body {
   }
 }
 
+/* Energy power flow: dashes running along a line with power, and a comet going round the battery ring */
+@keyframes flow {
+  to {
+    stroke-dashoffset: -44;
+  }
+}
+.flow-line {
+  animation: flow 1.2s linear infinite;
+}
+.flow-line-out {
+  animation-direction: reverse;
+}
+
+@keyframes comet-travel {
+  from {
+    stroke-dashoffset: var(--comet-start);
+  }
+  to {
+    stroke-dashoffset: var(--comet-end);
+  }
+}
+.comet {
+  stroke-dasharray: var(--comet-length) 2;
+  animation: comet-travel var(--comet-duration, 12s) linear infinite;
+}
+
 /* Recharts: no focus outline on the chart surface, the tooltip already shows what is selected */
 .recharts-wrapper,
 .recharts-surface {
@@ -219,7 +245,11 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .aurora span,
   .shimmer::after,
-  .pulse-dot::after {
+  .pulse-dot::after,
+  .flow-line {
     animation: none;
+  }
+  .comet {
+    display: none;
   }
 }

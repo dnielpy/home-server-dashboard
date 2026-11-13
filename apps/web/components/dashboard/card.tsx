@@ -5,7 +5,7 @@ import type { IconProps } from "@/components/icons/icon-props";
 export type Accent = "emerald" | "amber" | "sky" | "violet" | "rose";
 
 // Written out so Tailwind keeps them
-const ACCENTS: Record<Accent, string> = {
+export const ACCENTS: Record<Accent, string> = {
   emerald: "accent-emerald",
   amber: "accent-amber",
   sky: "accent-sky",
