@@ -11,9 +11,22 @@ class Throughput(BaseModel):
     tx_bytes_per_second: int
 
 
+class BandwidthPoint(BaseModel):
+    start: datetime
+    rx_bytes: int
+    tx_bytes: int
+
+
 class Bandwidth(BaseModel):
     total_rx_bytes: int
     total_tx_bytes: int
+    items: list[BandwidthPoint]
+
+
+class SpeedTest(BaseModel):
+    measured_at: datetime
+    download_mbps: float
+    ping_ms: float | None
 
 
 class DeviceUsage(BaseModel):
@@ -28,10 +41,16 @@ async def current_throughput(homenet: Upstream) -> Throughput:
 
 
 async def bandwidth(homenet: Upstream, hours: float) -> Bandwidth:
-    # Daily buckets keep the response small; only the totals are used
-    return Bandwidth.model_validate(await homenet.get("/bandwidth", hours=hours, bucket="day"))
+    """Per hour, oldest first, with the totals of the whole range."""
+    return Bandwidth.model_validate(await homenet.get("/bandwidth", hours=hours, bucket="hour"))
 
 
 async def device_usage(homenet: Upstream, hours: float) -> list[DeviceUsage]:
     """Heaviest first; devices without usage are left out."""
     return [DeviceUsage.model_validate(item) for item in await homenet.get("/device-usage", hours=hours)]
+
+
+async def latest_speed_test(homenet: Upstream) -> SpeedTest | None:
+    """The last speed test Home Net ran (every 10 minutes), or None before the first one."""
+    body = await homenet.get("/speed-test/latest")
+    return None if body is None else SpeedTest.model_validate(body)

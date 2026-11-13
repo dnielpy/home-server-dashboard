@@ -131,3 +131,75 @@ def test_redirect_or_html_is_502(client, upstreams) -> None:
 
     assert response.status_code == 502
     assert response.json()["source"] == "bluetti"
+
+
+def test_battery_history_in_10_minute_steps(client, upstreams) -> None:
+    calls = upstreams(
+        bluetti={
+            "/battery-status": [
+                {"date": "2026-11-13T10:01:00Z", "battery_percent": 80},
+                {"date": "2026-11-13T10:09:00Z", "battery_percent": 78},
+                {"date": "2026-11-13T10:12:00Z", "battery_percent": 77},
+            ],
+            "/ac-output-history": [
+                {"date": "2026-11-13T10:01:00Z", "ac_output": 100},
+                {"date": "2026-11-13T10:09:00Z", "ac_output": 150},
+                {"date": "2026-11-13T10:25:00Z", "ac_output": 90},
+            ],
+        }
+    )
+
+    body = client.get("/dashboard/battery/history").json()
+
+    assert body["points"] == [
+        {"at": "2026-11-13T10:00:00Z", "soc": 78, "load_w": 125.0},
+        {"at": "2026-11-13T10:10:00Z", "soc": 77, "load_w": None},
+        {"at": "2026-11-13T10:20:00Z", "soc": None, "load_w": 90.0},
+    ]
+    assert {call.url.params["hours"] for call in calls} == {"24"}
+
+
+def test_network_usage_per_hour(client, upstreams) -> None:
+    calls = upstreams(
+        homenet={
+            "/bandwidth": {
+                "total_rx_bytes": 3_000,
+                "total_tx_bytes": 300,
+                "items": [
+                    {"start": "2026-11-13T10:00:00Z", "rx_bytes": 1_000, "tx_bytes": 100},
+                    {"start": "2026-11-13T11:00:00Z", "rx_bytes": 2_000, "tx_bytes": 200},
+                ],
+            },
+            "/device-usage": [],
+        }
+    )
+
+    body = client.get("/dashboard/network/usage").json()
+
+    assert [hour["rx_bytes"] for hour in body["hourly"]] == [1_000, 2_000]
+    assert calls[0].url.params["bucket"] == "hour"
+
+
+def test_speed_test(client, upstreams) -> None:
+    upstreams(
+        homenet={
+            "/speed-test/latest": {
+                "measured_at": "2026-11-13T12:00:00Z",
+                "download_mbps": 48.5,
+                "ping_ms": 31.0,
+                "duration_ms": 9000,
+                "server_location": "Havana",
+                "client_location": None,
+            }
+        }
+    )
+
+    body = client.get("/dashboard/network/speed-test").json()
+
+    assert (body["download_mbps"], body["ping_ms"]) == (48.5, 31.0)
+
+
+def test_speed_test_before_the_first_one(client, upstreams) -> None:
+    upstreams(homenet={"/speed-test/latest": (200, None)})
+
+    assert client.get("/dashboard/network/speed-test").json() is None

@@ -29,6 +29,16 @@ class BatteryEstimate(BaseModel):
     hours_to_full: float | None = None
 
 
+class BatteryPoint(BaseModel):
+    date: datetime
+    battery_percent: int
+
+
+class LoadPoint(BaseModel):
+    date: datetime
+    ac_output: int
+
+
 async def power_totals(bluetti: Upstream, hours: float) -> PowerTotals:
     return PowerTotals.model_validate(await bluetti.get("/power-totals", hours=hours))
 
@@ -39,3 +49,13 @@ async def power_periods(bluetti: Upstream, hours: float) -> list[PowerPeriod]:
 
 async def battery_estimate(bluetti: Upstream) -> BatteryEstimate:
     return BatteryEstimate.model_validate(await bluetti.get("/battery-estimate"))
+
+
+async def battery_history(bluetti: Upstream, hours: float) -> list[BatteryPoint]:
+    """The battery percentage of every reading in the last `hours`, oldest first."""
+    return [BatteryPoint.model_validate(item) for item in await bluetti.get("/battery-status", hours=hours)]
+
+
+async def load_history(bluetti: Upstream, hours: float) -> list[LoadPoint]:
+    """The AC output (W) of every reading in the last `hours`, oldest first."""
+    return [LoadPoint.model_validate(item) for item in await bluetti.get("/ac-output-history", hours=hours)]

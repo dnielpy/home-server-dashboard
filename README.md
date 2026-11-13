@@ -7,8 +7,9 @@ Dashboard with the stats of every app on the home server, one card each:
 | Bluetti charge (green charged, yellow charging, red discharging) | Bluetti `/battery-estimate` |
 | Time until the battery is empty or full | Bluetti `/battery-estimate` |
 | Hours with and without power in the last 24 h | Bluetti `/power-totals`, `/power-periods` |
-| Nano download speed right now | Home Net `/connection/throughput/current` |
-| Bandwidth used in the last 24 h | Home Net `/bandwidth` |
+| Battery percentage and load over the last 24 h | Bluetti `/battery-status`, `/ac-output-history` |
+| Nano download speed right now, with the last speed test | Home Net `/connection/throughput/current`, `/speed-test/latest` |
+| Bandwidth used in the last 24 h, per hour | Home Net `/bandwidth` |
 | Device that used the most bandwidth in the last 24 h | Home Net `/device-usage` |
 | Videos LocalTube is downloading | LocalTube `/api/stats/downloads/active` |
 | Hours each LocalTube profile has watched | LocalTube `/api/stats/watch-time` |

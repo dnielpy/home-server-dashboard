@@ -1,3 +1,4 @@
+import json
 from collections.abc import Callable, Iterator
 from typing import Any
 
@@ -22,7 +23,10 @@ def _client(source: str, routes: Routes, calls: list[httpx.Request]) -> Upstream
         if isinstance(answer, Exception):
             raise answer
         if isinstance(answer, tuple):
-            return httpx.Response(answer[0], json=answer[1])
+            # Serialized by hand so a None body is sent as `null`, as the apps do, instead of no body
+            return httpx.Response(
+                answer[0], content=json.dumps(answer[1]), headers={"Content-Type": "application/json"}
+            )
         return httpx.Response(200, json=answer)
 
     return Upstream(source, httpx.AsyncClient(base_url=f"http://{source}", transport=httpx.MockTransport(handle)))

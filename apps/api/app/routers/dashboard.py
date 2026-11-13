@@ -5,7 +5,10 @@ from fastapi import APIRouter
 from app.battery import battery_out
 from app.clients import bluetti, homenet, localtube
 from app.clients.upstream import UpstreamsDep
+from app import history
 from app.schemas import (
+    BandwidthHourOut,
+    BatteryHistoryOut,
     BatteryOut,
     DownloadsOut,
     LocalTubeOut,
@@ -13,6 +16,7 @@ from app.schemas import (
     NetworkUsageOut,
     PowerOut,
     PowerPeriodOut,
+    SpeedTestOut,
     TopDeviceOut,
     UpstreamErrorOut,
     WatchTimeOut,
@@ -60,6 +64,19 @@ async def battery(upstreams: UpstreamsDep) -> BatteryOut:
 
 
 @router.get(
+    "/battery/history",
+    response_model=BatteryHistoryOut,
+    description="The battery percentage and the load (W) over the last 24 hours, in 10 minute steps (Bluetti).",
+)
+async def battery_history(upstreams: UpstreamsDep) -> BatteryHistoryOut:
+    battery, load = await asyncio.gather(
+        bluetti.battery_history(upstreams.bluetti, DAY_HOURS),
+        bluetti.load_history(upstreams.bluetti, DAY_HOURS),
+    )
+    return BatteryHistoryOut(hours=DAY_HOURS, points=history.battery_history(battery, load))
+
+
+@router.get(
     "/network/speed",
     response_model=NetworkSpeedOut,
     description="The Nano's speed right now (rx is download), read live by Home Net in about a second.",
@@ -72,7 +89,9 @@ async def network_speed(upstreams: UpstreamsDep) -> NetworkSpeedOut:
 @router.get(
     "/network/usage",
     response_model=NetworkUsageOut,
-    description="Bandwidth used in the last 24 hours and the device that used the most (Home Net).",
+    description=(
+        "Bandwidth used in the last 24 hours, in total and per hour, and the device that used the most (Home Net)."
+    ),
 )
 async def network_usage(upstreams: UpstreamsDep) -> NetworkUsageOut:
     total, devices = await asyncio.gather(
@@ -84,7 +103,18 @@ async def network_usage(upstreams: UpstreamsDep) -> NetworkUsageOut:
         total_rx_bytes=total.total_rx_bytes,
         total_tx_bytes=total.total_tx_bytes,
         top_device=TopDeviceOut(**devices[0].model_dump()) if devices else None,
+        hourly=[BandwidthHourOut(**item.model_dump()) for item in total.items],
     )
+
+
+@router.get(
+    "/network/speed-test",
+    response_model=SpeedTestOut | None,
+    description="The last speed test Home Net ran (every 10 minutes), or null before the first one.",
+)
+async def speed_test(upstreams: UpstreamsDep) -> SpeedTestOut | None:
+    result = await homenet.latest_speed_test(upstreams.homenet)
+    return None if result is None else SpeedTestOut(**result.model_dump())
 
 
 @router.get(

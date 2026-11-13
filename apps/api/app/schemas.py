@@ -38,6 +38,17 @@ class BatteryOut(BaseModel):
     eta_kind: Literal["reserve", "full"] | None
 
 
+class BatteryHistoryPointOut(BaseModel):
+    at: datetime
+    soc: int | None
+    load_w: float | None
+
+
+class BatteryHistoryOut(BaseModel):
+    hours: float
+    points: list[BatteryHistoryPointOut]
+
+
 class NetworkSpeedOut(BaseModel):
     measured_at: datetime
     rx_bytes_per_second: int
@@ -51,11 +62,24 @@ class TopDeviceOut(BaseModel):
     up_bytes: int
 
 
+class BandwidthHourOut(BaseModel):
+    start: datetime
+    rx_bytes: int
+    tx_bytes: int
+
+
 class NetworkUsageOut(BaseModel):
     hours: float
     total_rx_bytes: int
     total_tx_bytes: int
     top_device: TopDeviceOut | None
+    hourly: list[BandwidthHourOut]
+
+
+class SpeedTestOut(BaseModel):
+    measured_at: datetime
+    download_mbps: float
+    ping_ms: float | None
 
 
 class DownloadOut(BaseModel):
