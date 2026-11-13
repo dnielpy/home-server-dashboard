@@ -1,0 +1,24 @@
+[project]
+name = "home-server-dashboard-api"
+version = "0.1.0"
+description = "API that gathers the stats of every app on the home server for the dashboard"
+readme = "README.md"
+authors = [
+    { name = "dnielpy", email = "dnielquesada@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.162.4",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.16.2",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.16.0",
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

@@ -1,0 +1,39 @@
+const UNITS = ["B", "KB", "MB", "GB", "TB"];
+
+const clockFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+export function formatBytes(bytes: number): string {
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1000 && unit < UNITS.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  const digits = unit === 0 || value >= 100 ? 0 : 1;
+  return `${value.toFixed(digits)} ${UNITS[unit]}`;
+}
+
+/** Bits per second, the unit internet plans and speed tests use. */
+export function formatBitsPerSecond(bytesPerSecond: number): { value: string; unit: string } {
+  const mbps = (bytesPerSecond * 8) / 1_000_000;
+  if (mbps < 1) return { value: ((bytesPerSecond * 8) / 1_000).toFixed(0), unit: "kbps" };
+  return { value: mbps.toFixed(mbps >= 10 ? 0 : 1), unit: "Mbps" };
+}
+
+export function formatElapsed(ms: number): string {
+  const minutes = Math.max(0, Math.floor(ms / 60_000));
+  if (minutes < 1) return "less than a minute";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return minutes % 60 ? `${hours} h ${minutes % 60} min` : `${hours} h`;
+  const days = Math.floor(hours / 24);
+  return hours % 24 ? `${days} d ${hours % 24} h` : `${days} d`;
+}
+
+export function formatHours(hours: number): string {
+  return hours > 0 ? formatElapsed(hours * 3_600_000) : "None";
+}
+
+export function formatClock(value: string | number): string {
+  return clockFormat.format(new Date(value));
+}

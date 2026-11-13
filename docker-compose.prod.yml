@@ -1,0 +1,41 @@
+name: home-server-dashboard-prod
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  api:
+    build:
+      context: apps/api
+    restart: unless-stopped
+    environment:
+      # The other apps are reached through the ports they publish on the host
+      BLUETTI_API_URL: ${BLUETTI_API_URL:-http://host.docker.internal:3001}
+      HOMENET_API_URL: ${HOMENET_API_URL:-http://host.docker.internal:3011}
+      LOCALTUBE_API_URL: ${LOCALTUBE_API_URL:-http://host.docker.internal:3005}
+      LOCALTUBE_SERVICE_TOKEN: ${LOCALTUBE_SERVICE_TOKEN:?Set LOCALTUBE_SERVICE_TOKEN to LocalTube's SERVICE_TOKEN}
+      UPSTREAM_TIMEOUT_SECONDS: ${UPSTREAM_TIMEOUT_SECONDS:-8}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${API_PORT:-3021}:3021"
+    logging: *logging
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_URL: http://api:3021
+      # Server-rendered dates use the container's timezone
+      TZ: ${TZ:-America/Havana}
+    ports:
+      - "${WEB_PORT:-3020}:3000"
+    logging: *logging
