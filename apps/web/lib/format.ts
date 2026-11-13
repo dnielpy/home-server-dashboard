@@ -30,6 +30,11 @@ export function formatElapsed(ms: number): string {
   return hours % 24 ? `${days} d ${hours % 24} h` : `${days} d`;
 }
 
+/** How long ago a past moment was, as 3 h 20 min. */
+export function formatElapsedSince(value: string | number, now = Date.now()): string {
+  return formatElapsed(now - new Date(value).getTime());
+}
+
 export function formatHours(hours: number): string {
   return hours > 0 ? formatElapsed(hours * 3_600_000) : "None";
 }
@@ -54,4 +59,13 @@ const hourFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "
 /** A chart axis label, e.g. 14:00. */
 export function formatHour(value: string | number): string {
   return hourFormat.format(new Date(value));
+}
+
+const dayFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
+
+/** A past moment as 14:05 when it was today, or 12 Nov, 14:05 before that. */
+export function formatSince(value: string | number, now = Date.now()): string {
+  const date = new Date(value);
+  const sameDay = dayFormat.format(date) === dayFormat.format(now);
+  return sameDay ? formatClock(date.getTime()) : `${dayFormat.format(date)}, ${formatClock(date.getTime())}`;
 }

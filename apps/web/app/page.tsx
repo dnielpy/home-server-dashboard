@@ -42,7 +42,7 @@ export default function Dashboard() {
   return (
     <main className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col gap-8 p-4 sm:p-6 xl:p-8">
       <h1 className="sr-only">Dashboard</h1>
-      <Reveal index={0} className="flex flex-wrap items-end justify-between gap-4">
+      <Reveal index={0} className="flex flex-wrap items-center justify-between gap-6">
         <LiveClock />
         <Suspense fallback={<SourceStatusSkeleton />}>
           <SourceStatus />

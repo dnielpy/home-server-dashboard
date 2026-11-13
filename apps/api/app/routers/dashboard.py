@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from app.battery import battery_out
 from app.clients import bluetti, homenet, localtube
 from app.clients.upstream import UpstreamsDep
-from app import history
+from app import history, status
 from app.schemas import (
     BandwidthHourOut,
     BatteryHistoryOut,
@@ -16,6 +16,7 @@ from app.schemas import (
     NetworkUsageOut,
     PowerOut,
     PowerPeriodOut,
+    SourceStatusOut,
     SpeedTestOut,
     TopDeviceOut,
     UpstreamErrorOut,
@@ -29,6 +30,25 @@ router = APIRouter(
     tags=["dashboard"],
     responses={502: {"model": UpstreamErrorOut, "description": "The app the card reads from failed"}},
 )
+
+
+@router.get(
+    "/status",
+    response_model=list[SourceStatusOut],
+    description=(
+        "Whether each app answers its health check and since when, checked every 30 seconds. `since` is the first check "
+        "after this API started when the app has not changed since."
+    ),
+)
+async def source_status(upstreams: UpstreamsDep, tracker: status.StatusTrackerDep) -> list[SourceStatusOut]:
+    # Right after startup the first background check may not have finished yet
+    if not tracker.complete:
+        await status.check_all(upstreams, tracker)
+    return [
+        SourceStatusOut(source=source, up=state.up, since=state.since, detail=state.detail)
+        for source in status.HEALTH_PATHS
+        if (state := tracker.states.get(source))
+    ]
 
 
 @router.get(

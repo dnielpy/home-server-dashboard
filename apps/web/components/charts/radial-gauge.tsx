@@ -1,27 +1,30 @@
 "use client";
 
 import { motion } from "motion/react";
+import type { ReactNode } from "react";
 
 import { BatteryIcon } from "@/components/icons/battery-icon";
 import { BoltIcon } from "@/components/icons/bolt-icon";
 
 const RADIUS = 42;
 
-/** The battery's charge as a ring that fills to its percentage, lit in `from` → `to`. */
+/** The battery's charge as a ring that fills to its percentage, lit in `from` → `to`, with `children` in its middle. */
 export function RadialGauge({
   percent,
   from,
   to,
   charging,
+  children,
 }: {
   percent: number;
   from: string;
   to: string;
   charging: boolean;
+  children?: ReactNode;
 }) {
   const Icon = charging ? BoltIcon : BatteryIcon;
   return (
-    <div className="relative aspect-square h-full max-h-36 min-h-24">
+    <div className="relative aspect-square w-full max-w-52">
       <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90 overflow-visible" aria-hidden>
         <defs>
           <linearGradient id="gauge-stroke" x1="0" y1="0" x2="1" y2="1">
@@ -52,14 +55,16 @@ export function RadialGauge({
           />
         ))}
       </svg>
-      <motion.span
-        className="absolute inset-0 m-auto flex h-10 w-10 items-center justify-center"
-        style={{ color: to }}
-        animate={charging ? { scale: [1, 1.15, 1], opacity: [0.8, 1, 0.8] } : undefined}
-        transition={charging ? { duration: 1.8, repeat: Infinity, ease: "easeInOut" } : undefined}
-      >
-        <Icon className="h-7 w-7" />
-      </motion.span>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <motion.span
+          style={{ color: to }}
+          animate={charging ? { scale: [1, 1.15, 1], opacity: [0.8, 1, 0.8] } : undefined}
+          transition={charging ? { duration: 1.8, repeat: Infinity, ease: "easeInOut" } : undefined}
+        >
+          <Icon className="h-5 w-5" />
+        </motion.span>
+        {children}
+      </div>
     </div>
   );
 }

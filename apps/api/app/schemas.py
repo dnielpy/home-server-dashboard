@@ -12,6 +12,14 @@ class UpstreamErrorOut(BaseModel):
     source: str
 
 
+class SourceStatusOut(BaseModel):
+    source: Literal["bluetti", "homenet", "localtube"]
+    up: bool
+    # When it came up or went down; the first check after this API started when it has not changed since
+    since: datetime
+    detail: str | None
+
+
 class PowerPeriodOut(BaseModel):
     start: datetime
     end: datetime

@@ -37,6 +37,13 @@ async function getJson<T>(path: string): Promise<T> {
   return response.json();
 }
 
+export type SourceStatus = {
+  source: "bluetti" | "homenet" | "localtube";
+  up: boolean;
+  since: string;
+  detail: string | null;
+};
+
 export type PowerPeriod = {
   start: string;
   end: string;
@@ -122,6 +129,10 @@ export const getPower = cache(() => getJson<Power>("/dashboard/power"));
 export const getBattery = cache(() => getJson<Battery>("/dashboard/battery"));
 export const getNetworkUsage = cache(() => getJson<NetworkUsage>("/dashboard/network/usage"));
 export const getLocalTube = cache(() => getJson<LocalTube>("/dashboard/localtube"));
+
+export function getStatus(): Promise<SourceStatus[]> {
+  return getJson<SourceStatus[]>("/dashboard/status");
+}
 
 export function getBatteryHistory(): Promise<BatteryHistory> {
   return getJson<BatteryHistory>("/dashboard/battery/history");

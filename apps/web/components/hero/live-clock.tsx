@@ -26,8 +26,8 @@ export function LiveClock() {
 
   return (
     <div className="min-h-16">
-      <p className="text-sm text-muted">{now ? `${greeting(now.getHours())} · ${dateFormat.format(now)}` : " "}</p>
-      <p className="mt-0.5 bg-linear-to-r from-foreground to-muted bg-clip-text text-4xl font-semibold tracking-tight text-transparent tabular-nums sm:text-5xl">
+      <p className="text-base text-muted sm:text-lg">{now ? `${greeting(now.getHours())} · ${dateFormat.format(now)}` : " "}</p>
+      <p className="mt-1 bg-linear-to-r from-foreground to-muted bg-clip-text text-6xl font-semibold tracking-tight text-transparent leading-none tabular-nums sm:text-7xl xl:text-9xl">
         {now ? timeFormat.format(now) : " "}
       </p>
     </div>

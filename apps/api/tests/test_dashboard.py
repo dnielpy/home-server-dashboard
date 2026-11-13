@@ -1,4 +1,9 @@
+from datetime import datetime, timezone
+
 import httpx
+
+from app.main import app
+from app.status import StatusTracker, get_status_tracker
 
 PERIODS = [
     {"start": "2026-11-12T12:00:00Z", "end": "2026-11-13T02:00:00Z", "receiving_ac": True},
@@ -203,3 +208,33 @@ def test_speed_test_before_the_first_one(client, upstreams) -> None:
     upstreams(homenet={"/speed-test/latest": (200, None)})
 
     assert client.get("/dashboard/network/speed-test").json() is None
+
+
+def test_status_checks_every_app(client, upstreams) -> None:
+    upstreams(
+        bluetti={"/health": {"status": "ok"}},
+        homenet={"/health": {"status": "ok"}},
+        localtube={"/api/health": httpx.ConnectError("refused")},
+    )
+    app.dependency_overrides[get_status_tracker] = StatusTracker
+
+    body = client.get("/dashboard/status").json()
+
+    assert [(item["source"], item["up"]) for item in body] == [
+        ("bluetti", True),
+        ("homenet", True),
+        ("localtube", False),
+    ]
+    assert "Could not reach localtube" in body[2]["detail"]
+
+
+def test_status_keeps_since_until_the_state_changes() -> None:
+    tracker = StatusTracker()
+    first, second, third = (datetime(2026, 11, 13, hour, tzinfo=timezone.utc) for hour in (10, 11, 12))
+
+    tracker.record("bluetti", True, None, first)
+    tracker.record("bluetti", True, None, second)
+    assert tracker.states["bluetti"].since == first
+
+    tracker.record("bluetti", False, "refused", third)
+    assert (tracker.states["bluetti"].up, tracker.states["bluetti"].since) == (False, third)

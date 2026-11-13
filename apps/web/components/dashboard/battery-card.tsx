@@ -27,15 +27,14 @@ export async function BatteryCard() {
   const style = STATES[data.state];
   return (
     <Card title="Bluetti" Icon={BatteryIcon} accent={style.accent}>
-      <div className="flex flex-1 items-center justify-between gap-4">
-        <div className="flex flex-col justify-end self-stretch">
-          <p className="text-5xl font-light tracking-tight text-foreground xl:text-6xl">
+      <div className="flex flex-1 flex-col items-center justify-center gap-2">
+        <RadialGauge percent={data.soc ?? 0} from={style.from} to={style.to} charging={data.state === "charging"}>
+          <p className="text-4xl font-light tracking-tight text-foreground xl:text-5xl">
             {data.soc === null ? "—" : <AnimatedNumber value={data.soc} />}
-            {data.soc !== null && <span className="ml-0.5 text-2xl text-muted xl:text-3xl">%</span>}
+            {data.soc !== null && <span className="ml-0.5 text-xl text-muted xl:text-2xl">%</span>}
           </p>
-          <p className={`mt-1 text-sm font-medium ${style.text}`}>{style.label}</p>
-        </div>
-        <RadialGauge percent={data.soc ?? 0} from={style.from} to={style.to} charging={data.state === "charging"} />
+        </RadialGauge>
+        <p className={`text-sm font-medium ${style.text}`}>{style.label}</p>
       </div>
     </Card>
   );
