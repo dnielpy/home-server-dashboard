@@ -5,8 +5,16 @@ import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 
 import { COLORS } from "@/components/charts/chart-theme";
 
-/** The share of the day with grid power as a ring, with that share in its middle. */
-export function PowerDonut({ withPower, withoutPower }: { withPower: number; withoutPower: number }) {
+/** The share of the day with grid power as a ring, with that share in its middle. `className` sizes it. */
+export function PowerDonut({
+  withPower,
+  withoutPower,
+  className = "h-full max-h-40 min-h-28",
+}: {
+  withPower: number;
+  withoutPower: number;
+  className?: string;
+}) {
   const animate = !useReducedMotion();
   const total = withPower + withoutPower;
   const percent = total > 0 ? Math.round((withPower / total) * 100) : 0;
@@ -16,7 +24,7 @@ export function PowerDonut({ withPower, withoutPower }: { withPower: number; wit
   ];
 
   return (
-    <div className="relative aspect-square h-full max-h-40 min-h-28">
+    <div className={`relative aspect-square ${className}`}>
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
