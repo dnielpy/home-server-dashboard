@@ -64,6 +64,11 @@ export type Battery = {
   eta_kind: "reserve" | "full" | null;
 };
 
+export type BatteryHistory = {
+  hours: number;
+  points: { at: string; soc: number | null; load_w: number | null }[];
+};
+
 export type NetworkSpeed = {
   measured_at: string;
   rx_bytes_per_second: number;
@@ -82,6 +87,13 @@ export type NetworkUsage = {
   total_rx_bytes: number;
   total_tx_bytes: number;
   top_device: TopDevice | null;
+  hourly: { start: string; rx_bytes: number; tx_bytes: number }[];
+};
+
+export type SpeedTest = {
+  measured_at: string;
+  download_mbps: number;
+  ping_ms: number | null;
 };
 
 export type Download = {
@@ -109,6 +121,14 @@ export const getPower = cache(() => getJson<Power>("/dashboard/power"));
 export const getBattery = cache(() => getJson<Battery>("/dashboard/battery"));
 export const getNetworkUsage = cache(() => getJson<NetworkUsage>("/dashboard/network/usage"));
 export const getLocalTube = cache(() => getJson<LocalTube>("/dashboard/localtube"));
+
+export function getBatteryHistory(): Promise<BatteryHistory> {
+  return getJson<BatteryHistory>("/dashboard/battery/history");
+}
+
+export function getSpeedTest(): Promise<SpeedTest | null> {
+  return getJson<SpeedTest | null>("/dashboard/network/speed-test");
+}
 
 export function getNetworkSpeed(): Promise<NetworkSpeed> {
   return getJson<NetworkSpeed>("/dashboard/network/speed");

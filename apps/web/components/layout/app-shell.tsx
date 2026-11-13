@@ -10,10 +10,15 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-dvh flex-col">
+      <div aria-hidden className="aurora">
+        <span />
+        <span />
+        <span />
+      </div>
       <AppBar onMenuClick={() => setSidebarOpen((open) => !open)} />
       <div className="flex min-h-0 flex-1">
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-[#eef2fb] dark:bg-zinc-950">{children}</div>
+        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</div>
       </div>
     </div>
   );

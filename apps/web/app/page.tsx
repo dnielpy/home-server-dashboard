@@ -4,56 +4,87 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { BandwidthCard } from "@/components/dashboard/bandwidth-card";
 import { BatteryCard } from "@/components/dashboard/battery-card";
 import { BatteryEtaCard } from "@/components/dashboard/battery-eta-card";
+import { BatteryHistoryCard } from "@/components/dashboard/battery-history-card";
 import { CardSkeleton } from "@/components/dashboard/card";
 import { DownloadsCard } from "@/components/dashboard/downloads-card";
 import { NetworkSpeedCard } from "@/components/dashboard/network-speed-card";
 import { PowerCard } from "@/components/dashboard/power-card";
 import { TopDeviceCard } from "@/components/dashboard/top-device-card";
 import { WatchTimeCard } from "@/components/dashboard/watch-time-card";
+import { LiveClock } from "@/components/hero/live-clock";
+import { SourceStatus, SourceStatusSkeleton } from "@/components/hero/source-status";
+import { Reveal } from "@/components/ui/reveal";
 
 const REFRESH_INTERVAL_MS = 30_000;
 
-/** A cell of the grid: one column, or two for the wider cards. Each loads on its own. */
-function Slot({ wide, children }: { wide?: boolean; children: ReactNode }) {
+/** A cell of the grid. `className` sets its span; `index` its turn in the entrance. Each loads on its own. */
+function Slot({ index, className, children }: { index: number; className: string; children: ReactNode }) {
   return (
-    <div className={`min-w-0 ${wide ? "col-span-2" : "col-span-2 sm:col-span-1"}`}>
+    <Reveal index={index} className={`min-w-0 ${className}`}>
       <Suspense fallback={<CardSkeleton />}>{children}</Suspense>
-    </div>
+    </Reveal>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section aria-label={title} className="flex flex-col gap-3">
+      <h2 className="flex items-center gap-3 px-1 text-xs font-semibold tracking-[0.18em] text-muted uppercase">
+        {title}
+        <span aria-hidden className="h-px flex-1 bg-linear-to-r from-surface-border to-transparent" />
+      </h2>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-6 xl:grid-cols-12">{children}</div>
+    </section>
   );
 }
 
 export default function Dashboard() {
   return (
-    <main className="flex flex-1 flex-col p-3">
+    <main className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col gap-8 p-4 sm:p-6 xl:p-8">
       <h1 className="sr-only">Dashboard</h1>
-      {/* From lg up the three rows share the height of the screen, so the cards fill it with no gaps; a row only
-          grows past its share when its content does not fit */}
-      <div className="grid flex-1 grid-cols-2 gap-3 lg:grid-cols-4 lg:grid-rows-[repeat(3,minmax(min-content,1fr))]">
-        <Slot>
+      <Reveal index={0} className="flex flex-wrap items-end justify-between gap-4">
+        <LiveClock />
+        <Suspense fallback={<SourceStatusSkeleton />}>
+          <SourceStatus />
+        </Suspense>
+      </Reveal>
+
+      <Section title="Energy">
+        <Slot index={1} className="md:col-span-3 xl:col-span-3">
           <BatteryCard />
         </Slot>
-        <Slot>
+        <Slot index={2} className="md:col-span-3 xl:col-span-3">
           <BatteryEtaCard />
         </Slot>
-        <Slot wide>
+        <Slot index={3} className="md:col-span-6 xl:col-span-6">
           <PowerCard />
         </Slot>
-        <Slot>
+        <Slot index={4} className="md:col-span-6 xl:col-span-12 [&_section]:min-h-72">
+          <BatteryHistoryCard />
+        </Slot>
+      </Section>
+
+      <Section title="Network">
+        <Slot index={5} className="md:col-span-3 xl:col-span-4">
           <NetworkSpeedCard />
         </Slot>
-        <Slot>
+        <Slot index={6} className="md:col-span-3 xl:col-span-5">
           <BandwidthCard />
         </Slot>
-        <Slot wide>
+        <Slot index={7} className="md:col-span-6 xl:col-span-3">
           <TopDeviceCard />
         </Slot>
-        <Slot wide>
+      </Section>
+
+      <Section title="LocalTube">
+        <Slot index={8} className="md:col-span-3 xl:col-span-6">
           <DownloadsCard />
         </Slot>
-        <Slot wide>
+        <Slot index={9} className="md:col-span-3 xl:col-span-6">
           <WatchTimeCard />
         </Slot>
-      </div>
+      </Section>
+
       <AutoRefresh intervalMs={REFRESH_INTERVAL_MS} />
     </main>
   );

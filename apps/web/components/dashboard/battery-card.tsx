@@ -1,65 +1,41 @@
+import { RadialGauge } from "@/components/charts/radial-gauge";
 import { BatteryIcon } from "@/components/icons/battery-icon";
-import { BoltIcon } from "@/components/icons/bolt-icon";
-import { Card, CardUnavailable } from "@/components/dashboard/card";
+import { type Accent, Card, CardUnavailable } from "@/components/dashboard/card";
 import { load } from "@/components/dashboard/load";
+import { AnimatedNumber } from "@/components/ui/animated-number";
 import { type BatteryState, getBattery } from "@/lib/api";
 
-const RADIUS = 42;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-
-const STATES: Record<BatteryState, { label: string; ring: string; text: string }> = {
-  full: { label: "Charged", ring: "stroke-emerald-500", text: "text-emerald-600 dark:text-emerald-400" },
-  charging: { label: "Charging", ring: "stroke-amber-400", text: "text-amber-600 dark:text-amber-400" },
-  discharging: { label: "Discharging", ring: "stroke-red-500", text: "text-red-600 dark:text-red-400" },
-  idle: { label: "Not charging", ring: "stroke-zinc-400", text: "text-zinc-500 dark:text-zinc-400" },
-  unknown: { label: "No recent readings", ring: "stroke-zinc-400", text: "text-zinc-500 dark:text-zinc-400" },
+const STATES: Record<BatteryState, { label: string; accent: Accent; from: string; to: string; text: string }> = {
+  full: { label: "Charged", accent: "emerald", from: "#22d3ee", to: "#10b981", text: "text-emerald-600 dark:text-emerald-400" },
+  charging: { label: "Charging", accent: "amber", from: "#fde047", to: "#f59e0b", text: "text-amber-600 dark:text-amber-400" },
+  discharging: { label: "Discharging", accent: "rose", from: "#fb923c", to: "#ef4444", text: "text-red-600 dark:text-red-400" },
+  idle: { label: "Not charging", accent: "sky", from: "#94a3b8", to: "#64748b", text: "text-muted" },
+  unknown: { label: "No recent readings", accent: "sky", from: "#94a3b8", to: "#64748b", text: "text-muted" },
 };
 
-function Ring({ percent, state }: { percent: number; state: BatteryState }) {
-  const Icon = state === "charging" ? BoltIcon : BatteryIcon;
-  return (
-    <div className="relative h-20 w-20 xl:h-28 xl:w-28">
-      <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90" aria-hidden>
-        <circle cx="50" cy="50" r={RADIUS} fill="none" strokeWidth="9" className="stroke-zinc-200 dark:stroke-zinc-800" />
-        <circle
-          cx="50"
-          cy="50"
-          r={RADIUS}
-          fill="none"
-          strokeWidth="9"
-          strokeLinecap="round"
-          strokeDasharray={`${(percent / 100) * CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-          className={`${STATES[state].ring} transition-[stroke-dasharray] duration-700`}
-        />
-      </svg>
-      <Icon className={`absolute inset-0 m-auto h-7 w-7 xl:h-10 xl:w-10 ${STATES[state].text}`} />
-    </div>
-  );
-}
-
-/** The Bluetti's charge as a ring: green when charged, yellow while charging, red while discharging. */
+/** The Bluetti's charge as a glowing ring: green when charged, yellow while charging, red while discharging. */
 export async function BatteryCard() {
   const { data, error } = await load(getBattery);
   if (error !== undefined) {
     return (
-      <Card title="Bluetti" Icon={BatteryIcon}>
+      <Card title="Bluetti" Icon={BatteryIcon} accent="emerald">
         <CardUnavailable message={error} />
       </Card>
     );
   }
 
-  const percent = data.soc ?? 0;
   const style = STATES[data.state];
   return (
-    <Card title="Bluetti" Icon={BatteryIcon}>
-      <div className="flex flex-1 flex-col justify-between gap-4">
-        <Ring percent={percent} state={data.state} />
-        <div>
-          <p className="text-5xl font-light xl:text-6xl tracking-tight text-zinc-900 tabular-nums dark:text-zinc-50">
-            {data.soc === null ? "—" : `${data.soc}%`}
+    <Card title="Bluetti" Icon={BatteryIcon} accent={style.accent}>
+      <div className="flex flex-1 items-center justify-between gap-4">
+        <div className="flex flex-col justify-end self-stretch">
+          <p className="text-5xl font-light tracking-tight text-foreground xl:text-6xl">
+            {data.soc === null ? "—" : <AnimatedNumber value={data.soc} />}
+            {data.soc !== null && <span className="ml-0.5 text-2xl text-muted xl:text-3xl">%</span>}
           </p>
           <p className={`mt-1 text-sm font-medium ${style.text}`}>{style.label}</p>
         </div>
+        <RadialGauge percent={data.soc ?? 0} from={style.from} to={style.to} charging={data.state === "charging"} />
       </div>
     </Card>
   );

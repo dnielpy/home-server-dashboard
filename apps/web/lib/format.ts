@@ -37,3 +37,21 @@ export function formatHours(hours: number): string {
 export function formatClock(value: string | number): string {
   return clockFormat.format(new Date(value));
 }
+
+/** The same as formatBytes, split so the number can be animated and the unit styled apart. */
+export function splitBytes(bytes: number): { value: number; unit: string; digits: number } {
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1000 && unit < UNITS.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  return { value, unit: UNITS[unit], digits: unit === 0 || value >= 100 ? 0 : 1 };
+}
+
+const hourFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+/** A chart axis label, e.g. 14:00. */
+export function formatHour(value: string | number): string {
+  return hourFormat.format(new Date(value));
+}
