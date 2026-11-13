@@ -3,7 +3,7 @@ import { type ReactNode, Suspense } from "react";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { BandwidthCard } from "@/components/dashboard/bandwidth-card";
 import { BatteryCard } from "@/components/dashboard/battery-card";
-import { BatteryEtaCard } from "@/components/dashboard/battery-eta-card";
+import { LoadCard } from "@/components/dashboard/load-card";
 import { BatteryHistoryCard } from "@/components/dashboard/battery-history-card";
 import { CardSkeleton } from "@/components/dashboard/card";
 import { CpuCard } from "@/components/dashboard/cpu-card";
@@ -60,7 +60,7 @@ export default function Dashboard() {
           <BatteryCard />
         </Slot>
         <Slot index={2} className="md:col-span-3 xl:col-span-3">
-          <BatteryEtaCard />
+          <LoadCard />
         </Slot>
         <Slot index={3} className="md:col-span-6 xl:col-span-6">
           <PowerCard />
