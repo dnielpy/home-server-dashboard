@@ -19,7 +19,7 @@ export async function BandwidthCard() {
   return (
     <Card title={title} Icon={TrafficIcon}>
       <div className="flex flex-1 flex-col justify-end">
-        <p className="text-4xl font-semibold text-zinc-900 tabular-nums dark:text-zinc-50">
+        <p className="text-4xl font-semibold xl:text-5xl text-zinc-900 tabular-nums dark:text-zinc-50">
           {formatBytes(data.total_rx_bytes + data.total_tx_bytes)}
         </p>
         <p className="mt-1 text-sm text-zinc-500 tabular-nums dark:text-zinc-400">

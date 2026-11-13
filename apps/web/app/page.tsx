@@ -24,9 +24,11 @@ function Slot({ wide, children }: { wide?: boolean; children: ReactNode }) {
 
 export default function Dashboard() {
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-6">
-      <h1 className="mb-4 text-xl font-semibold text-zinc-900 dark:text-zinc-50">Dashboard</h1>
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <main className="flex flex-1 flex-col p-3">
+      <h1 className="sr-only">Dashboard</h1>
+      {/* From lg up the three rows share the height of the screen, so the cards fill it with no gaps; a row only
+          grows past its share when its content does not fit */}
+      <div className="grid flex-1 grid-cols-2 gap-3 lg:grid-cols-4 lg:grid-rows-[repeat(3,minmax(min-content,1fr))]">
         <Slot>
           <BatteryCard />
         </Slot>

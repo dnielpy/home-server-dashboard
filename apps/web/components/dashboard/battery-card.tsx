@@ -18,7 +18,7 @@ const STATES: Record<BatteryState, { label: string; ring: string; text: string }
 function Ring({ percent, state }: { percent: number; state: BatteryState }) {
   const Icon = state === "charging" ? BoltIcon : BatteryIcon;
   return (
-    <div className="relative h-20 w-20">
+    <div className="relative h-20 w-20 xl:h-28 xl:w-28">
       <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90" aria-hidden>
         <circle cx="50" cy="50" r={RADIUS} fill="none" strokeWidth="9" className="stroke-zinc-200 dark:stroke-zinc-800" />
         <circle
@@ -32,7 +32,7 @@ function Ring({ percent, state }: { percent: number; state: BatteryState }) {
           className={`${STATES[state].ring} transition-[stroke-dasharray] duration-700`}
         />
       </svg>
-      <Icon className={`absolute inset-0 m-auto h-7 w-7 ${STATES[state].text}`} />
+      <Icon className={`absolute inset-0 m-auto h-7 w-7 xl:h-10 xl:w-10 ${STATES[state].text}`} />
     </div>
   );
 }
@@ -55,7 +55,7 @@ export async function BatteryCard() {
       <div className="flex flex-1 flex-col justify-between gap-4">
         <Ring percent={percent} state={data.state} />
         <div>
-          <p className="text-5xl font-light tracking-tight text-zinc-900 tabular-nums dark:text-zinc-50">
+          <p className="text-5xl font-light xl:text-6xl tracking-tight text-zinc-900 tabular-nums dark:text-zinc-50">
             {data.soc === null ? "—" : `${data.soc}%`}
           </p>
           <p className={`mt-1 text-sm font-medium ${style.text}`}>{style.label}</p>

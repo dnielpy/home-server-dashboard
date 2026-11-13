@@ -49,9 +49,9 @@ export function NetworkSpeedCard() {
         <CardUnavailable message="The Nano could not be read." />
       ) : (
         <div aria-live="polite" className="flex flex-1 flex-col justify-end">
-          <p className="text-4xl font-semibold text-zinc-900 tabular-nums dark:text-zinc-50">
+          <p className="text-4xl font-semibold xl:text-5xl text-zinc-900 tabular-nums dark:text-zinc-50">
             {download ? download.value : "…"}
-            {download && <span className="ml-1 text-base font-medium text-zinc-500">{download.unit}</span>}
+            {download && <span className="ml-1 text-base font-medium text-zinc-500 xl:text-xl">{download.unit}</span>}
           </p>
           <p className="mt-1 text-sm text-zinc-500 tabular-nums dark:text-zinc-400">
             {upload ? `↑ ${upload.value} ${upload.unit} upload` : "Measuring…"}

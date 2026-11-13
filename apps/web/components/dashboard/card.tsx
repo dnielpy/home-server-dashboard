@@ -13,8 +13,8 @@ type CardProps = {
 
 export function Card({ title, Icon, badge, footer, children }: CardProps) {
   return (
-    <section className="flex h-full min-h-40 flex-col rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-      <header className="flex items-center gap-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">
+    <section className="flex h-full min-h-40 flex-col rounded-2xl border border-zinc-200 bg-white p-5 xl:p-6 dark:border-zinc-800 dark:bg-zinc-900">
+      <header className="flex items-center gap-2 text-sm font-medium text-zinc-500 xl:text-base dark:text-zinc-400">
         <Icon className="h-4 w-4 shrink-0" />
         <h2 className="truncate">{title}</h2>
         {badge && <div className="ml-auto shrink-0">{badge}</div>}

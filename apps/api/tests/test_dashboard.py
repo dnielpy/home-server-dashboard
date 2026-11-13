@@ -122,3 +122,12 @@ def test_app_error_is_502_with_its_detail(client, upstreams) -> None:
         "detail": "homenet answered 503: The Nano did not answer in time",
         "source": "homenet",
     }
+
+
+def test_redirect_or_html_is_502(client, upstreams) -> None:
+    upstreams(bluetti={"/power-totals": (303, None), "/power-periods": []})
+
+    response = client.get("/dashboard/power")
+
+    assert response.status_code == 502
+    assert response.json()["source"] == "bluetti"

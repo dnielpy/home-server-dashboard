@@ -39,11 +39,11 @@ export async function TopDeviceCard() {
       <div className="flex flex-1 flex-col justify-end gap-3">
         <div className="flex items-end justify-between gap-4">
           <div className="min-w-0">
-            <p className="truncate text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{device.name}</p>
+            <p className="truncate text-2xl font-semibold xl:text-3xl text-zinc-900 dark:text-zinc-50">{device.name}</p>
             <p className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{device.mac}</p>
           </div>
           <div className="shrink-0 text-right">
-            <p className="text-2xl font-semibold text-zinc-900 tabular-nums dark:text-zinc-50">{formatBytes(used)}</p>
+            <p className="text-2xl font-semibold xl:text-3xl text-zinc-900 tabular-nums dark:text-zinc-50">{formatBytes(used)}</p>
             <p className="text-xs text-zinc-500 tabular-nums dark:text-zinc-400">
               ↓ {formatBytes(device.down_bytes)} · ↑ {formatBytes(device.up_bytes)}
             </p>

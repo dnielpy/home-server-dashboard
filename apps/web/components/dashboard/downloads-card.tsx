@@ -27,7 +27,7 @@ export async function DownloadsCard() {
     >
       <div className="flex flex-1 flex-col gap-4 sm:flex-row sm:items-end">
         <div className="shrink-0">
-          <p className="text-5xl font-light text-zinc-900 tabular-nums dark:text-zinc-50">{count}</p>
+          <p className="text-5xl font-light xl:text-6xl text-zinc-900 tabular-nums dark:text-zinc-50">{count}</p>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">{count === 1 ? "video" : "videos"} in progress</p>
         </div>
         {items.length > 0 && (

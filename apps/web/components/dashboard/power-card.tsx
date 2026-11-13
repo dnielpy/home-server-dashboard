@@ -72,7 +72,7 @@ export async function PowerCard() {
                 <span aria-hidden className="h-2 w-2 rounded-full bg-red-500" />
                 Blackout
               </p>
-              <p className="mt-1 text-2xl font-semibold text-zinc-900 tabular-nums dark:text-zinc-50">
+              <p className="mt-1 text-2xl font-semibold xl:text-3xl text-zinc-900 tabular-nums dark:text-zinc-50">
                 {formatHours(data.without_power_hours)}
               </p>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">{share(data.without_power_hours, recorded)}</p>
@@ -82,7 +82,7 @@ export async function PowerCard() {
                 <span aria-hidden className="h-2 w-2 rounded-full bg-emerald-500" />
                 With power
               </p>
-              <p className="mt-1 text-2xl font-semibold text-zinc-900 tabular-nums dark:text-zinc-50">
+              <p className="mt-1 text-2xl font-semibold xl:text-3xl text-zinc-900 tabular-nums dark:text-zinc-50">
                 {formatHours(data.with_power_hours)}
               </p>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">{share(data.with_power_hours, recorded)}</p>

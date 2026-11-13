@@ -26,9 +26,13 @@ class Upstream:
             response = await self.http.get(path, params={k: v for k, v in params.items() if v is not None})
         except httpx.HTTPError as err:
             raise UpstreamError(self.source, f"Could not reach {self.source}: {err!r}") from err
-        if response.is_error:
+        if not response.is_success:
             raise UpstreamError(self.source, f"{self.source} answered {response.status_code}: {_detail(response)}")
-        return response.json()
+        try:
+            return response.json()
+        except ValueError as err:
+            # Something else is listening on that port
+            raise UpstreamError(self.source, f"{self.source} did not answer with JSON") from err
 
 
 def _detail(response: httpx.Response) -> str:

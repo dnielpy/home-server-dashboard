@@ -45,7 +45,7 @@ export async function BatteryEtaCard() {
       footer={data.load_w === null ? undefined : `${Math.round(data.load_w)} W load right now`}
     >
       <div className="flex flex-1 flex-col justify-end">
-        <p className="text-3xl font-semibold text-zinc-900 tabular-nums dark:text-zinc-50">{value}</p>
+        <p className="text-3xl font-semibold 2xl:text-4xl text-zinc-900 tabular-nums dark:text-zinc-50">{value}</p>
         <p className="mt-1 text-sm text-zinc-500 tabular-nums dark:text-zinc-400">{detail}</p>
       </div>
     </Card>
