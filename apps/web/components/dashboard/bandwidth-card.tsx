@@ -19,7 +19,8 @@ export async function BandwidthCard() {
   }
 
   const total = splitBytes(data.total_rx_bytes + data.total_tx_bytes);
-  const hours = data.hourly.map((hour) => ({ ...hour, start: Date.parse(hour.start) }));
+  // An API deployed before the hourly breakdown leaves it out; the total still shows, without the bars
+  const hours = (data.hourly ?? []).map((hour) => ({ ...hour, start: Date.parse(hour.start) }));
   return (
     <Card title={title} Icon={TrafficIcon} accent="violet">
       <div className="flex flex-1 flex-col gap-4">

@@ -87,7 +87,8 @@ export type NetworkUsage = {
   total_rx_bytes: number;
   total_tx_bytes: number;
   top_device: TopDevice | null;
-  hourly: { start: string; rx_bytes: number; tx_bytes: number }[];
+  /** Missing from an API older than the redesign. */
+  hourly?: { start: string; rx_bytes: number; tx_bytes: number }[];
 };
 
 export type SpeedTest = {
