@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.clients.upstream import UpstreamError, Upstreams
 from app.config import get_settings
-from app.routers import dashboard, health
+from app.routers import dashboard, health, management
 from app.status import StatusTracker, watch
 
 
@@ -24,6 +24,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Home Server Dashboard API", lifespan=lifespan)
 app.include_router(health.router)
 app.include_router(dashboard.router)
+app.include_router(management.router)
 
 
 @app.exception_handler(UpstreamError)

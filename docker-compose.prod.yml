@@ -17,6 +17,8 @@ services:
       HOMENET_API_URL: ${HOMENET_API_URL:-http://host.docker.internal:3011}
       LOCALTUBE_API_URL: ${LOCALTUBE_API_URL:-http://host.docker.internal:3005}
       LOCALTUBE_SERVICE_TOKEN: ${LOCALTUBE_SERVICE_TOKEN:?Set LOCALTUBE_SERVICE_TOKEN to LocalTube's SERVICE_TOKEN}
+      # The agent that updates the projects runs on the host itself (scripts/install-agent.sh)
+      AGENT_URL: ${AGENT_URL:-http://host.docker.internal:3022}
       UPSTREAM_TIMEOUT_SECONDS: ${UPSTREAM_TIMEOUT_SECONDS:-8}
     extra_hosts:
       - "host.docker.internal:host-gateway"

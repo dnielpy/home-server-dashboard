@@ -36,12 +36,18 @@ def _client(source: str, routes: Routes, calls: list[httpx.Request]) -> Upstream
 def upstreams() -> Iterator[Callable[..., list[httpx.Request]]]:
     """Points the API at fake upstream apps; returns the requests they received."""
 
-    def use(bluetti: Routes | None = None, homenet: Routes | None = None, localtube: Routes | None = None):
+    def use(
+        bluetti: Routes | None = None,
+        homenet: Routes | None = None,
+        localtube: Routes | None = None,
+        agent: Routes | None = None,
+    ):
         calls: list[httpx.Request] = []
         fake = Upstreams(
             bluetti=_client("bluetti", bluetti or {}, calls),
             homenet=_client("homenet", homenet or {}, calls),
             localtube=_client("localtube", localtube or {}, calls),
+            agent=_client("agent", agent or {}, calls),
         )
         app.dependency_overrides[get_upstreams] = lambda: fake
         return calls

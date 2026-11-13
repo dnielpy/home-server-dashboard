@@ -69,3 +69,45 @@ export function formatSince(value: string | number, now = Date.now()): string {
   const sameDay = dayFormat.format(date) === dayFormat.format(now);
   return sameDay ? formatClock(date.getTime()) : `${dayFormat.format(date)}, ${formatClock(date.getTime())}`;
 }
+
+/** How long ago a Unix time (seconds) was, as the update panel shows it: just now, 5 min ago, yesterday… */
+export function formatAgo(epochSeconds: number, nowSeconds = Date.now() / 1000): string {
+  const seconds = Math.max(0, nowSeconds - epochSeconds);
+  if (seconds < 60) return "just now";
+  if (seconds < 3_600) return `${Math.floor(seconds / 60)} min ago`;
+  if (seconds < 86_400) return `${Math.floor(seconds / 3_600)} h ago`;
+  if (seconds < 172_800) return "yesterday";
+  if (seconds < 2_592_000) return `${Math.floor(seconds / 86_400)} days ago`;
+  if (seconds < 31_536_000) {
+    const months = Math.floor(seconds / 2_592_000);
+    return months === 1 ? "1 month ago" : `${months} months ago`;
+  }
+  const years = Math.floor(seconds / 31_536_000);
+  return years === 1 ? "1 year ago" : `${years} years ago`;
+}
+
+/** A step's duration: 7s, 1m 05s. */
+export function formatDuration(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  if (whole < 60) return `${whole}s`;
+  return `${Math.floor(whole / 60)}m ${String(whole % 60).padStart(2, "0")}s`;
+}
+
+/** A running clock: 02:35. */
+export function formatStopwatch(seconds: number): string {
+  const whole = Math.max(0, Math.floor(seconds));
+  return `${String(Math.floor(whole / 60)).padStart(2, "0")}:${String(whole % 60).padStart(2, "0")}`;
+}
+
+const commitDateFormat = new Intl.DateTimeFormat("sv-SE", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+/** A commit's date, as 2026-11-13 14:05. */
+export function formatCommitDate(epochSeconds: number): string {
+  return commitDateFormat.format(new Date(epochSeconds * 1000));
+}

@@ -18,6 +18,20 @@ function apiUrl(path: string): string {
   return new URL(path, base).toString();
 }
 
+/** Passes a request of the browser on to the API as it is, answering 503 when the API cannot be reached. */
+export async function forward(path: string, method: "GET" | "POST"): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(apiUrl(path), { method, cache: "no-store" });
+  } catch {
+    return Response.json({ detail: "Could not reach the dashboard API" }, { status: 503 });
+  }
+  return new Response(response.body, {
+    status: response.status,
+    headers: { "Content-Type": response.headers.get("Content-Type") ?? "application/json" },
+  });
+}
+
 async function getJson<T>(path: string): Promise<T> {
   await connection();
   let response: Response;
@@ -144,4 +158,77 @@ export function getSpeedTest(): Promise<SpeedTest | null> {
 
 export function getNetworkSpeed(): Promise<NetworkSpeed> {
   return getJson<NetworkSpeed>("/dashboard/network/speed");
+}
+
+// Management: the projects on the server, as the agent there reports them. Times are Unix seconds.
+
+export type AgentInfo = {
+  user: string;
+  host: string;
+  root: string;
+};
+
+export type ServiceStatus = {
+  /** False when the project never had containers, null when Docker could not be asked. */
+  deployed: boolean | null;
+  up: boolean;
+  since: string | null;
+  detail: string | null;
+};
+
+export type FetchState = "pending" | "ok" | "err" | "noup";
+
+export type Project = {
+  name: string;
+  path: string;
+  branch: string | null;
+  fetch: FetchState;
+  fetch_error: string | null;
+  behind: number;
+  local_epoch: number | null;
+  remote_epoch: number | null;
+  service: ServiceStatus;
+  updating: boolean;
+};
+
+export type Commit = {
+  hash: string;
+  epoch: number;
+  subject: string;
+};
+
+export type ProjectDetail = Project & {
+  has_upstream: boolean;
+  head: Commit | null;
+  remote: Commit | null;
+  ahead: number;
+  commits: (Commit & { author: string })[];
+  dirty: boolean;
+};
+
+export type UpdateStep = {
+  label: string;
+  started_at: number;
+  finished_at: number | null;
+};
+
+export type UpdateJob = {
+  project: string;
+  running: boolean;
+  code: number | null;
+  cancelled: boolean;
+  first_deploy: boolean;
+  started_at: number;
+  finished_at: number | null;
+  hash: string | null;
+  steps: UpdateStep[];
+  expected_steps: string[];
+  lines: string[];
+  offset: number;
+  total_lines: number;
+  now: number;
+};
+
+export function getProjects(): Promise<Project[]> {
+  return getJson<Project[]>("/management/projects");
 }

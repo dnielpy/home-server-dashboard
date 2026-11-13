@@ -4,6 +4,6 @@
   "private": true,
   "scripts": {
     "dev": "uv run uvicorn app.main:app --reload --port 3021",
-    "test": "uv run pytest"
+    "test": "uv run pytest && uv run pytest ../agent/tests"
   }
 }

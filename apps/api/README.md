@@ -11,4 +11,5 @@ uv run pytest
 ```
 
 Every `/dashboard/*` endpoint answers 502 with `{"detail", "source"}` when the app it reads from cannot be reached,
-so a card fails on its own instead of the whole page.
+so a card fails on its own instead of the whole page. The `/management/*` endpoints pass the requests of the
+Management page on to the agent on the server (`AGENT_URL`), answering 502 with `source: "agent"` when it is down.

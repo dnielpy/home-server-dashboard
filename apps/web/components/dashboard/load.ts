@@ -4,6 +4,7 @@ const SOURCE_NAMES: Record<string, string> = {
   bluetti: "The Bluetti API",
   homenet: "Home Net",
   localtube: "LocalTube",
+  agent: "The agent on the server",
 };
 
 export type Loaded<T> = { data: T; error?: never } | { data?: never; error: string };

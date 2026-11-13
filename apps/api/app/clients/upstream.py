@@ -10,10 +10,13 @@ from app.config import Settings
 class UpstreamError(Exception):
     """An app the dashboard reads from could not be reached or answered with an error."""
 
-    def __init__(self, source: str, detail: str) -> None:
+    def __init__(self, source: str, detail: str, status: int | None = None, reason: str | None = None) -> None:
         super().__init__(detail)
         self.source = source
         self.detail = detail
+        # The status and detail the app answered with, when it did answer
+        self.status = status
+        self.reason = reason
 
 
 @dataclass
@@ -22,12 +25,23 @@ class Upstream:
     http: httpx.AsyncClient
 
     async def get(self, path: str, **params: Any) -> Any:
+        return await self._request("GET", path, params)
+
+    async def post(self, path: str) -> Any:
+        return await self._request("POST", path, {})
+
+    async def _request(self, method: str, path: str, params: dict[str, Any]) -> Any:
         try:
-            response = await self.http.get(path, params={k: v for k, v in params.items() if v is not None})
+            response = await self.http.request(
+                method, path, params={k: v for k, v in params.items() if v is not None}
+            )
         except httpx.HTTPError as err:
             raise UpstreamError(self.source, f"Could not reach {self.source}: {err!r}") from err
         if not response.is_success:
-            raise UpstreamError(self.source, f"{self.source} answered {response.status_code}: {_detail(response)}")
+            reason = _detail(response)
+            raise UpstreamError(
+                self.source, f"{self.source} answered {response.status_code}: {reason}", response.status_code, reason
+            )
         try:
             return response.json()
         except ValueError as err:
@@ -47,6 +61,7 @@ class Upstreams:
     bluetti: Upstream
     homenet: Upstream
     localtube: Upstream
+    agent: Upstream
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "Upstreams":
@@ -58,10 +73,11 @@ class Upstreams:
             bluetti=Upstream("bluetti", client(settings.bluetti_api_url)),
             homenet=Upstream("homenet", client(settings.homenet_api_url)),
             localtube=Upstream("localtube", client(settings.localtube_api_url, **token)),
+            agent=Upstream("agent", client(settings.agent_url)),
         )
 
     async def aclose(self) -> None:
-        for upstream in (self.bluetti, self.homenet, self.localtube):
+        for upstream in (self.bluetti, self.homenet, self.localtube, self.agent):
             await upstream.http.aclose()
 
 

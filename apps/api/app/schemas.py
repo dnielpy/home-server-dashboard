@@ -113,3 +113,87 @@ class WatchTimeOut(BaseModel):
 class LocalTubeOut(BaseModel):
     downloading: DownloadsOut
     watch_time: list[WatchTimeOut]
+
+
+# Management: the projects on the server and their updates, as the agent reports them. Times as Unix seconds.
+
+FetchState = Literal["pending", "ok", "err", "noup"]
+
+
+class AgentInfoOut(BaseModel):
+    user: str
+    host: str
+    # The folder with the projects, as ~/home-server
+    root: str
+
+
+class ServiceStatusOut(BaseModel):
+    # False when the project never had containers, None when Docker could not be asked
+    deployed: bool | None
+    up: bool
+    # When the last container came up, or the last one stopped
+    since: datetime | None
+    detail: str | None
+
+
+class ProjectOut(BaseModel):
+    name: str
+    path: str
+    branch: str | None
+    # The last git fetch: running, done, failed, or done on a branch that follows no remote
+    fetch: FetchState
+    fetch_error: str | None
+    behind: int
+    local_epoch: int | None
+    remote_epoch: int | None
+    service: ServiceStatusOut
+    updating: bool
+
+
+class CommitOut(BaseModel):
+    hash: str
+    epoch: int
+    subject: str
+
+
+class NewCommitOut(CommitOut):
+    author: str
+
+
+class ProjectDetailOut(ProjectOut):
+    has_upstream: bool
+    head: CommitOut | None
+    remote: CommitOut | None
+    # Commits on the server that are not on GitHub
+    ahead: int
+    # Commits on GitHub that are not on the server, newest first
+    commits: list[NewCommitOut]
+    # Uncommitted changes to tracked files, which can make the pull fail
+    dirty: bool
+
+
+class UpdateStepOut(BaseModel):
+    label: str
+    started_at: float
+    finished_at: float | None
+
+
+class UpdateJobOut(BaseModel):
+    project: str
+    running: bool
+    code: int | None
+    cancelled: bool
+    first_deploy: bool
+    started_at: float
+    finished_at: float | None
+    # The commit the server is on after the update
+    hash: str | None
+    steps: list[UpdateStepOut]
+    # The steps update.sh prints, to show them before it reaches them
+    expected_steps: list[str]
+    lines: list[str]
+    # Ask again from here for the lines that came after
+    offset: int
+    total_lines: int
+    # The agent's clock, to count the elapsed time without trusting the browser's
+    now: float
