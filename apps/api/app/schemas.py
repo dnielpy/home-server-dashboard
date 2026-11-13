@@ -137,7 +137,7 @@ class DiskOut(BaseModel):
 class SystemNetworkOut(BaseModel):
     # The interface of the default route; None away from Linux
     interface: str | None
-    # Over the last 5 seconds; None until the agent has two readings to compare
+    # Over the last second; None until the agent has two readings to compare
     rx_bytes_per_second: float | None
     tx_bytes_per_second: float | None
     # Since the agent started counting, across reboots of the server
@@ -153,7 +153,7 @@ class TrafficPointOut(BaseModel):
 
 class SystemOut(BaseModel):
     updated_at: datetime
-    # Over the last 5 seconds; None until the agent has two readings to compare
+    # Over the last second; None until the agent has two readings to compare
     cpu_percent: float | None
     # None away from Linux, where there is no /proc/meminfo
     memory: MemoryOut | None

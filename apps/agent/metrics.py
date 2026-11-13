@@ -1,7 +1,7 @@
 """The server's CPU, memory, disks and network, read from /proc and the filesystems the way top and df do.
 
-A thread samples every few seconds, so the CPU use and the network speed are the ones of the last seconds instead of
-since boot. Every 5 minutes it also stores the network speed in a SQLite file, for the traffic of the last week, and
+A thread samples every second, so the CPU use and the network speed are the ones of the last second instead of since
+boot, and the dashboard can show them changing live. Every 5 minutes it also stores the network speed in a SQLite file, for the traffic of the last week, and
 the bytes the interface has carried, which keep adding up across reboots of the server. Only uses the standard
 library, like the agent.
 """
@@ -21,7 +21,7 @@ PROC = Path(os.environ.get("PROC_ROOT", "/proc"))
 SYSTEM_DISK_MOUNT = os.environ.get("SYSTEM_DISK_MOUNT", "/")
 EXTERNAL_DISK_MOUNT = os.environ.get("EXTERNAL_DISK_MOUNT", "/mnt/external")
 
-SAMPLE_SECONDS = 5
+SAMPLE_SECONDS = 1
 STORE_SECONDS = 5 * 60
 HISTORY_SECONDS = 7 * 24 * 3600
 BUCKET_SECONDS = 15 * 60

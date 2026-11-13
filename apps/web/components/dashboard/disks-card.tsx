@@ -1,8 +1,10 @@
-import { Card, CardUnavailable } from "@/components/dashboard/card";
-import { load } from "@/components/dashboard/load";
+"use client";
+
+import { Card, CardSkeleton, CardUnavailable } from "@/components/dashboard/card";
+import { useSystem } from "@/components/dashboard/system-live";
 import { UsageMeter } from "@/components/dashboard/usage";
 import { DiskIcon } from "@/components/icons/disk-icon";
-import { type Disk, getSystem } from "@/lib/api";
+import type { Disk } from "@/lib/api";
 import { formatBytes } from "@/lib/format";
 
 const DISK_NAMES: Record<Disk["name"], string> = {
@@ -11,9 +13,10 @@ const DISK_NAMES: Record<Disk["name"], string> = {
 };
 
 /** How full each of the server's disks is. */
-export async function DisksCard() {
-  const { data, error } = await load(getSystem);
-  if (error !== undefined) {
+export function DisksCard() {
+  const { data, error } = useSystem();
+  if (!data) {
+    if (!error) return <CardSkeleton />;
     return (
       <Card title="Disks" Icon={DiskIcon} accent="sky">
         <CardUnavailable message={error} />

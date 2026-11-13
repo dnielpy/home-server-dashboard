@@ -1,8 +1,9 @@
-import { Card, CardUnavailable } from "@/components/dashboard/card";
-import { load } from "@/components/dashboard/load";
+"use client";
+
+import { Card, CardSkeleton, CardUnavailable } from "@/components/dashboard/card";
+import { useSystem } from "@/components/dashboard/system-live";
 import { TrafficIcon } from "@/components/icons/traffic-icon";
 import { AnimatedNumber } from "@/components/ui/animated-number";
-import { getSystem } from "@/lib/api";
 import { formatBitsPerSecond, formatBytes } from "@/lib/format";
 
 function Speed({ label, color, bytesPerSecond }: { label: string; color: string; bytesPerSecond: number | null }) {
@@ -21,10 +22,11 @@ function Speed({ label, color, bytesPerSecond }: { label: string; color: string;
   );
 }
 
-/** The traffic of the server's network interface now, and all it has carried since the agent started counting. */
-export async function ServerTrafficCard() {
-  const { data, error } = await load(getSystem);
-  if (error !== undefined) {
+/** The traffic of the server's network interface in the last second, and all it has carried since the agent started counting. */
+export function ServerTrafficCard() {
+  const { data, error } = useSystem();
+  if (!data) {
+    if (!error) return <CardSkeleton />;
     return (
       <Card title="Server network" Icon={TrafficIcon} accent="sky">
         <CardUnavailable message={error} />

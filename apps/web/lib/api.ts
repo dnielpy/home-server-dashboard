@@ -178,7 +178,6 @@ export const getPower = cache(() => getJson<Power>("/dashboard/power"));
 export const getBattery = cache(() => getJson<Battery>("/dashboard/battery"));
 export const getNetworkUsage = cache(() => getJson<NetworkUsage>("/dashboard/network/usage"));
 export const getLocalTube = cache(() => getJson<LocalTube>("/dashboard/localtube"));
-export const getSystem = cache(() => getJson<System>("/dashboard/system"));
 
 export function getStatus(): Promise<SourceStatus[]> {
   return getJson<SourceStatus[]>("/dashboard/status");

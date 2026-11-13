@@ -159,7 +159,7 @@ async def local_tube(upstreams: UpstreamsDep) -> LocalTubeOut:
     "/system",
     response_model=SystemOut,
     description=(
-        "The server's CPU and network speed over the last 5 seconds, its memory and disks, and the bytes its network "
+        "The server's CPU and network speed over the last second, its memory and disks, and the bytes its network "
         "interface has carried since the agent started counting (the agent on the server)."
     ),
 )

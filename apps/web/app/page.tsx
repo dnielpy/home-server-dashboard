@@ -14,6 +14,7 @@ import { NetworkSpeedCard } from "@/components/dashboard/network-speed-card";
 import { PowerCard } from "@/components/dashboard/power-card";
 import { ServerTrafficCard } from "@/components/dashboard/server-traffic-card";
 import { ServerTrafficHistoryCard } from "@/components/dashboard/server-traffic-history-card";
+import { SystemLiveProvider } from "@/components/dashboard/system-live";
 import { TopDeviceCard } from "@/components/dashboard/top-device-card";
 import { WatchTimeCard } from "@/components/dashboard/watch-time-card";
 import { LiveClock } from "@/components/hero/live-clock";
@@ -91,21 +92,24 @@ export default function Dashboard() {
       </Section>
 
       <Section title="Server">
-        <Slot index={10} className="md:col-span-3 xl:col-span-3">
-          <CpuCard />
-        </Slot>
-        <Slot index={11} className="md:col-span-3 xl:col-span-3">
-          <MemoryCard />
-        </Slot>
-        <Slot index={12} className="md:col-span-6 xl:col-span-6">
-          <DisksCard />
-        </Slot>
-        <Slot index={13} className="md:col-span-6 xl:col-span-4">
-          <ServerTrafficCard />
-        </Slot>
-        <Slot index={14} className="md:col-span-6 xl:col-span-8 [&_section]:min-h-72">
-          <ServerTrafficHistoryCard />
-        </Slot>
+        {/* CPU, memory, disks and network update every second; the weekly chart with the rest of the page */}
+        <SystemLiveProvider>
+          <Slot index={10} className="md:col-span-3 xl:col-span-3">
+            <CpuCard />
+          </Slot>
+          <Slot index={11} className="md:col-span-3 xl:col-span-3">
+            <MemoryCard />
+          </Slot>
+          <Slot index={12} className="md:col-span-6 xl:col-span-6">
+            <DisksCard />
+          </Slot>
+          <Slot index={13} className="md:col-span-6 xl:col-span-4">
+            <ServerTrafficCard />
+          </Slot>
+          <Slot index={14} className="md:col-span-6 xl:col-span-8 [&_section]:min-h-72">
+            <ServerTrafficHistoryCard />
+          </Slot>
+        </SystemLiveProvider>
       </Section>
 
       <AutoRefresh intervalMs={REFRESH_INTERVAL_MS} />
