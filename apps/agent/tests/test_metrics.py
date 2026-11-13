@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -143,3 +144,28 @@ def test_a_missing_external_disk_is_left_out(tmp_path) -> None:
 
     assert [disk["name"] for disk in disks] == ["system"]
     assert disks[0]["total_bytes"] > 0
+
+
+def test_localtube_media_path_is_read_without_its_quotes(tmp_path) -> None:
+    (tmp_path / "local-tube").mkdir()
+    (tmp_path / "local-tube" / ".env.production").write_text('# The videos\nMEDIA_PATH="/mnt/disco/localtube"\n')
+
+    assert metrics.env_value(tmp_path / "local-tube" / ".env.production", "MEDIA_PATH") == "/mnt/disco/localtube"
+
+
+def test_media_on_the_system_disk_is_not_an_external_disk(tmp_path) -> None:
+    media = tmp_path / "videos"
+    media.mkdir()
+    (tmp_path / "local-tube").mkdir()
+    (tmp_path / "local-tube" / ".env.production").write_text(f"MEDIA_PATH={media}\n")
+
+    assert metrics.media_disk_mount(str(tmp_path), system_mount=str(tmp_path)) is None
+
+
+def test_without_localtube_there_is_no_external_disk(tmp_path) -> None:
+    assert metrics.media_disk_mount(str(tmp_path)) is None
+
+
+def test_the_mount_point_is_the_nearest_mounted_folder(tmp_path) -> None:
+    assert metrics.mount_point("/") == "/"
+    assert os.path.ismount(metrics.mount_point(str(tmp_path)))

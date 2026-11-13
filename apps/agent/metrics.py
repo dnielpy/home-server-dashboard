@@ -19,7 +19,8 @@ from typing import Any
 
 PROC = Path(os.environ.get("PROC_ROOT", "/proc"))
 SYSTEM_DISK_MOUNT = os.environ.get("SYSTEM_DISK_MOUNT", "/")
-EXTERNAL_DISK_MOUNT = os.environ.get("EXTERNAL_DISK_MOUNT", "/mnt/external")
+# Unset, the external disk is the one LocalTube keeps its videos on (MEDIA_PATH in its .env.production)
+EXTERNAL_DISK_MOUNT = os.environ.get("EXTERNAL_DISK_MOUNT", "")
 
 SAMPLE_SECONDS = 1
 STORE_SECONDS = 5 * 60
@@ -128,7 +129,42 @@ def read_disk(name: str, mount: str) -> dict[str, Any] | None:
     }
 
 
-def read_disks(system_mount: str = SYSTEM_DISK_MOUNT, external_mount: str = EXTERNAL_DISK_MOUNT) -> list[dict]:
+def env_value(env_file: Path, key: str) -> str | None:
+    """A variable of a .env file, without its quotes."""
+    try:
+        lines = env_file.read_text().splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        name, sep, value = line.strip().removeprefix("export ").partition("=")
+        if sep and name.strip() == key:
+            return value.strip().strip("'\"") or None
+    return None
+
+
+def mount_point(path: str) -> str:
+    """The mount point of the filesystem a path is on, like df shows it."""
+    current = os.path.realpath(path)
+    while not os.path.ismount(current):
+        current = os.path.dirname(current)
+    return current
+
+
+def media_disk_mount(root: str, system_mount: str = SYSTEM_DISK_MOUNT) -> str | None:
+    """Where the disk with LocalTube's videos is mounted, while it is plugged in."""
+    media = env_value(Path(root) / "local-tube" / ".env.production", "MEDIA_PATH")
+    if media is None:
+        return None
+    try:
+        # Without the disk plugged in its folder can still be there, on the system disk, so only another disk counts
+        if os.stat(media).st_dev == os.stat(system_mount).st_dev:
+            return None
+    except OSError:
+        return None
+    return mount_point(media)
+
+
+def read_disks(system_mount: str = SYSTEM_DISK_MOUNT, external_mount: str | None = EXTERNAL_DISK_MOUNT) -> list[dict]:
     disks = [read_disk("system", system_mount)]
     # Without the disk plugged in its folder is still there, on the system disk, so only a mount point counts
     if external_mount and os.path.ismount(external_mount):

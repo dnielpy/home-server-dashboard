@@ -501,6 +501,12 @@ JOBS = Jobs()
 # --- HTTP -----------------------------------------------------------------------------------------------------------
 
 
+def read_disks() -> list[dict[str, Any]]:
+    # Looked up on every read, so the external disk shows up as soon as it is plugged in
+    external = metrics.EXTERNAL_DISK_MOUNT or metrics.media_disk_mount(ROOT)
+    return metrics.read_disks(external_mount=external)
+
+
 def info() -> dict[str, Any]:
     home = str(Path.home())
     root = "~" + ROOT[len(home):] if ROOT.startswith(home) else ROOT
@@ -632,7 +638,7 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     global MONITOR
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    MONITOR = metrics.Monitor(STATE_DIR / "metrics.sqlite3")
+    MONITOR = metrics.Monitor(STATE_DIR / "metrics.sqlite3", disks=read_disks)
     MONITOR.start()
     for name in project_names():
         FETCHES.start(name)

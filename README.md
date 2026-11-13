@@ -105,6 +105,6 @@ updating the dashboard itself works: the page reconnects when it is back. `scrip
 the end so it runs the new code; logs with `journalctl --user -u home-server-agent`.
 
 For the Server cards it reads the host's `/proc` and its disks itself, and the cards ask for them every second: CPU
-and network speed over the last second, memory, the system disk (`/`) and the external one while it is mounted
-(`EXTERNAL_DISK_MOUNT`, `/mnt/external` by default). Every 5 minutes it stores the network speed and the bytes carried in `metrics.sqlite3` in its state folder,
+and network speed over the last second, memory, the system disk (`/`) and the external one while it is mounted: the
+disk LocalTube keeps its videos on (`MEDIA_PATH` in `local-tube/.env.production`), or `EXTERNAL_DISK_MOUNT` when set. Every 5 minutes it stores the network speed and the bytes carried in `metrics.sqlite3` in its state folder,
 for the 7 day chart and totals that keep adding up across reboots.
