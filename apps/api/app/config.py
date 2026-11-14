@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     agent_url: str = "http://localhost:3022"
     events_api_url: str = "http://localhost:3023"
     events_api_token: str | None = None
+    astro_api_url: str = "http://localhost:3024"
+    astro_api_token: str | None = None
     # The Nano's current speed takes up to 5 seconds to read
     upstream_timeout_seconds: float = 8
     # Where Sender keeps the packages until they are downloaded; a folder on the external disk in production

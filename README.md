@@ -35,6 +35,9 @@ The sidebar also has a module per app, with the pages that app's own web app had
 stores events in `~/.local/state/home-server-events/events.sqlite3`, and sends Telegram notifications through
 OpenClaw without invoking a model. The Events page controls each alert and shows delivery status.
 
+**Astro** has Chat, Skills and Memoria pages. Its host bridge connects to the local OpenClaw Gateway with a private
+token. Dashboard chats have their own context, separate from Telegram, and share Astro's skills and memory.
+
 ## Structure
 
 ```
@@ -43,6 +46,7 @@ apps/
   web/     Next.js frontend
   agent/   Runs on the server itself, outside Docker: git and docker for the Settings pages (standard library only)
   events/  Runs on the host: event polling, SQLite history and Telegram delivery (standard library only)
+  astro/   Runs on the host: narrow OpenClaw Gateway bridge for Chat, Skills and Memoria
 turbo.json   Task runner config (Turborepo)
 ```
 
@@ -143,3 +147,17 @@ fresh, stable samples before an alert.
 Explicit delivery failures retry automatically. If OpenClaw times out or the monitor restarts during a send, the
 event shows **Delivery unconfirmed** and pauses retries: Telegram may already have received it, so inspect the chat
 before sending another test.
+
+### Astro
+
+After installing OpenClaw and its Gateway, run `./scripts/install-astro.sh` on the server. This creates a private
+`ASTRO_API_TOKEN` in `.env.production` and starts the `home-server-astro` user service on port 3024. The dashboard API
+uses the same token. Rebuild the API and web containers so they receive the new setting. Check the service with
+`systemctl --user status home-server-astro` and `journalctl --user -u home-server-astro -f`.
+
+The browser never receives the OpenClaw Gateway token. Keep the dashboard and its API on a trusted local network or
+VPN. The bridge reads and changes only dashboard chats and Astro's skills and curated memory.
+Memory saves use Gateway compare-and-set plus OpenClaw's memory provenance store, then verify both the saved bytes and
+trusted provenance. The provenance function is an internal OpenClaw interface; after upgrading OpenClaw, reinstall the
+bridge and verify memory editing. If the interface is unavailable, the bridge refuses edits instead of overwriting a
+memory file without its trust record.

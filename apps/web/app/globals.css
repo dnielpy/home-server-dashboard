@@ -48,6 +48,20 @@ body {
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
 
+.astro-markdown p { margin: 0.5rem 0; }
+.astro-markdown h1, .astro-markdown h2, .astro-markdown h3 { margin: 1rem 0 0.5rem; font-weight: 650; }
+.astro-markdown h1 { font-size: 1.4rem; }
+.astro-markdown h2 { font-size: 1.2rem; }
+.astro-markdown ul { list-style: disc; padding-left: 1.5rem; margin: 0.5rem 0; }
+.astro-markdown ol { list-style: decimal; padding-left: 1.5rem; margin: 0.5rem 0; }
+.astro-markdown pre { overflow-x: auto; border: 1px solid var(--surface-border); background: var(--track); padding: 0.8rem; border-radius: 0.8rem; margin: 0.8rem 0; }
+.astro-markdown code { font-family: var(--font-geist-mono), monospace; font-size: 0.9em; }
+.astro-markdown :not(pre) > code { background: var(--track); padding: 0.15rem 0.3rem; border-radius: 0.3rem; }
+.astro-markdown blockquote { border-left: 3px solid #8b5cf6; padding-left: 0.8rem; color: var(--muted); }
+.astro-markdown a { color: #8b5cf6; text-decoration: underline; }
+.astro-markdown table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 0.8rem 0; }
+.astro-markdown th, .astro-markdown td { border: 1px solid var(--surface-border); padding: 0.4rem 0.6rem; }
+
 /* Each card sets --accent (an "r g b" triple) and its glow, gradients and charts take it from there */
 .accent-emerald {
   --accent: 16 185 129;
