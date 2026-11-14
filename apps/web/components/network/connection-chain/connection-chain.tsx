@@ -9,6 +9,7 @@ import { buildHopViews, linkState, sweepResult } from "@/components/network/conn
 import { useChainSweep } from "@/components/network/connection-chain/use-chain-sweep";
 import { RefreshIcon } from "@/components/icons/refresh-icon";
 import type { HopInfo, LatestCheck } from "@/lib/homenet-api";
+import { serverNow, syncServerClock } from "@/lib/server-clock";
 
 // How long the hops flash together before they collapse into the "Connected" ball
 const CELEBRATION_MS = 1_000;
@@ -31,10 +32,14 @@ export function ConnectionChain({ hops, latest }: ConnectionChainProps) {
 
   // Keeps "checked … ago" current without reading the clock while rendering
   useEffect(() => {
-    const tick = () => setNow(Date.now());
-    tick();
+    let cancelled = false;
+    const tick = () => setNow(serverNow());
+    syncServerClock().then(() => !cancelled && tick());
     const id = setInterval(tick, 30_000);
-    return () => clearInterval(id);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [checkedAt]);
   const { online, breakAt } = sweepResult(views);
   const internet = views.at(-1);

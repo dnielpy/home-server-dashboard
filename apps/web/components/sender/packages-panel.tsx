@@ -10,6 +10,7 @@ import { useSenderRefresh } from "@/components/sender/sender-refresh";
 import { Panel, PanelEmpty } from "@/components/ui/panel";
 import type { SenderFile, SenderPackage, SenderUnlock } from "@/lib/api";
 import { formatBytes, formatSince } from "@/lib/format";
+import { serverNow } from "@/lib/server-clock";
 
 // The list keeps up with packages sent from other devices; an open package follows its downloads closely
 const LIST_POLL_MS = 10_000;
@@ -134,7 +135,7 @@ export function PackagesPanel() {
                     <span className="block truncate text-sm font-medium text-foreground">{pkg.name}</span>
                     <span className="block text-xs text-muted tabular-nums">
                       {pkg.file_count} {pkg.file_count === 1 ? "file" : "files"} · {formatBytes(pkg.total_bytes)} ·{" "}
-                      {formatSince(pkg.created_at)}
+                      {formatSince(pkg.created_at, serverNow())}
                     </span>
                   </span>
                 </button>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { DeviceCard } from "@/components/network/devices/device-card";
 import type { Device } from "@/lib/homenet-api";
+import { serverNow } from "@/lib/server-clock";
 
 const REFRESH_INTERVAL_MS = 5_000;
 
@@ -21,7 +22,7 @@ export function LiveDeviceCard({ initialDevice, fetchedAt }: { initialDevice: De
         const next = ((await response.json()) as Device[]).find((item) => item.mac === initialDevice.mac);
         if (next && !cancelled) {
           setDevice(next);
-          setNow(Date.now());
+          setNow(serverNow());
         }
       } catch {
         // Keep showing the last state until the router answers again

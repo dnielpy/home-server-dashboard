@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { DeviceCard } from "@/components/network/devices/device-card";
 import type { Device } from "@/lib/homenet-api";
 import { formatKbs } from "@/lib/network/speed-format";
+import { serverNow } from "@/lib/server-clock";
 
 const REFRESH_INTERVAL_MS = 5_000;
 
@@ -23,7 +24,7 @@ export function DeviceList({ initialDevices, fetchedAt }: { initialDevices: Devi
         const next: Device[] = await response.json();
         if (!cancelled) {
           setDevices(next);
-          setNow(Date.now());
+          setNow(serverNow());
           setStale(false);
         }
       } catch {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { Probe } from "@/components/network/connection-chain/hop-state";
 import type { Hop, HopInfo, LatestCheck } from "@/lib/homenet-api";
+import { serverNow } from "@/lib/server-clock";
 
 // Each hop takes at least this long, so the sweep can be followed by eye
 export const HOP_DURATION_MS = 3_000;
@@ -122,7 +123,7 @@ export function useChainSweep(hops: HopInfo[], latest: LatestCheck | null): Chai
         }));
       }
 
-      const checkedAt = Date.now();
+      const checkedAt = serverNow();
       setState((current) => ({ ...current, phase: { kind: "done" }, apiError, checkedAt }));
     }
 
