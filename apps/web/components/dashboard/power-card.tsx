@@ -25,7 +25,7 @@ function Stat({ dot, label, hours }: { dot: string; label: string; hours: number
         <span aria-hidden className={`h-2 w-2 rounded-full ${dot}`} />
         {label}
       </p>
-      <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground tabular-nums sm:text-4xl xl:text-5xl">
+      <p className="mt-1 text-xl font-semibold tracking-tight text-foreground tabular-nums sm:text-3xl xl:text-4xl">
         {formatHours(hours)}
       </p>
     </div>
