@@ -7,12 +7,12 @@ import { ChevronIcon } from "@/components/icons/chevron-icon";
 import { isActive, type NavGroup } from "@/components/layout/nav-items";
 import { SidebarLink } from "@/components/layout/sidebar-link";
 
-/** A module with its pages folded under it; it opens on its own while one of them is shown. */
+/** A module with its pages under it, open to start with; it opens again on its own when one of them is shown. */
 export function SidebarGroup({ group, onNavigate }: { group: NavGroup; onNavigate: () => void }) {
   const pathname = usePathname();
   const listId = useId();
   const inside = group.children.some((link) => isActive(link, pathname));
-  const [open, setOpen] = useState(inside);
+  const [open, setOpen] = useState(true);
   const [wasInside, setWasInside] = useState(inside);
 
   // Arriving at one of its pages from elsewhere opens it; leaving keeps it as the user left it
