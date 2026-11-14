@@ -3,7 +3,7 @@
 
 Does what home-server.sh does: lists the folders with a git repo next to the dashboard's, compares them with GitHub
 and updates and redeploys them with their own scripts/update.sh. It also tells whether each one's containers are
-running and since when, and the server's CPU, memory, disks and network (metrics.py). Only uses the standard library,
+running and since when, stops, starts and restarts them and reads their logs, and the server's CPU, memory, disks and network (metrics.py). Only uses the standard library,
 so it runs with the python3 of the host.
 
 Usage: python3 agent.py   (ROOT, AGENT_PORT, STATE_DIR, SYSTEM_DISK_MOUNT and EXTERNAL_DISK_MOUNT can be set in the
@@ -45,6 +45,8 @@ DOCKER_CACHE_SECONDS = 5
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]")
 COMPOSE_LABEL = "com.docker.compose.project.working_dir"
+# The dashboard's own folder, which can be restarted but not stopped from the dashboard
+SELF = Path(__file__).resolve().parents[2].name
 
 
 class HttpError(Exception):
@@ -224,6 +226,92 @@ def summarize_containers(containers: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+# --- Containers -----------------------------------------------------------------------------------------------------
+
+
+def container_ids(path: str, service: str | None = None) -> list[str]:
+    filters = ["--filter", f"label={COMPOSE_LABEL}={path}"]
+    if service is not None:
+        filters += ["--filter", f"label=com.docker.compose.service={service}"]
+    result = run(["docker", "ps", "-aq", *filters], timeout=10)
+    if result.returncode != 0:
+        raise HttpError(502, (result.stderr.strip().splitlines() or ["docker ps failed"])[0])
+    return result.stdout.split()
+
+
+class Actions:
+    """The last stop, start or restart of each project's containers. They run in the background: restarting the
+    dashboard itself takes down the API that asked for it before docker answers."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.states: dict[str, dict[str, Any]] = {}
+
+    def start(self, name: str, action: str) -> None:
+        if action == "stop" and name == SELF:
+            raise HttpError(409, "Stopping the dashboard would leave no way to start it again from here")
+        job = JOBS.get(name)
+        if job is not None and job.running():
+            raise HttpError(409, f"{name} is updating")
+        ids = container_ids(project_path(name))
+        if not ids:
+            raise HttpError(409, f"{name} has no containers")
+        with self.lock:
+            if self.states.get(name, {}).get("state") == "pending":
+                raise HttpError(409, f"{name} is already {CONTAINER_ACTIONS[self.states[name]['name']]}")
+            self.states[name] = {"name": action, "state": "pending", "error": None}
+        threading.Thread(target=self._run, args=(name, action, ids), daemon=True).start()
+
+    def _run(self, name: str, action: str, ids: list[str]) -> None:
+        result = run(["docker", action, *ids], timeout=180)
+        error = None
+        if result.returncode != 0:
+            error = (result.stderr.strip().splitlines() or [f"docker {action} exited with code {result.returncode}"])[0]
+        service_status(project_path(name), fresh=True)
+        with self.lock:
+            self.states[name] = {"name": action, "state": "err" if error else "ok", "error": error}
+
+    def get(self, name: str) -> dict[str, Any] | None:
+        with self.lock:
+            state = self.states.get(name)
+            return dict(state) if state else None
+
+
+ACTIONS = Actions()
+# Each action, as the 409 for a second one says it
+CONTAINER_ACTIONS = {"stop": "stopping", "start": "starting", "restart": "restarting"}
+DEFAULT_LOG_LINES = 300
+
+
+def container_logs(name: str, service: str | None, tail: int) -> dict[str, Any]:
+    """The last `tail` lines of one of the project's containers, the first one when none is asked for."""
+    path = project_path(name)
+    services = [c["name"] for c in service_status(path)["containers"]]
+    service = service or (services[0] if services else None)
+    if service is None:
+        return {"containers": services, "container": None, "lines": []}
+    ids = container_ids(path, service)
+    if not ids:
+        raise HttpError(404, f"{name} has no container called {service}")
+    try:
+        result = subprocess.run(
+            ["docker", "logs", "--timestamps", "--tail", str(tail), ids[0]],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired) as err:
+        raise HttpError(502, f"docker logs failed: {err}") from err
+    lines = []
+    for raw in result.stdout.decode("utf-8", errors="replace").splitlines():
+        stamp, _, text = raw.partition(" ")
+        line = clean_line(text)
+        if line is not None:
+            lines.append({"time": _docker_time(stamp), "text": line})
+    return {"containers": services, "container": service, "lines": lines}
+
+
 # --- Projects -------------------------------------------------------------------------------------------------------
 
 
@@ -265,6 +353,8 @@ def summary(name: str) -> dict[str, Any]:
         "remote_epoch": remote["epoch"] if remote else None,
         "service": service_status(path),
         "updating": bool(job and job.running()),
+        "action": ACTIONS.get(name),
+        "dashboard": name == SELF,
     }
 
 
@@ -598,6 +688,19 @@ def _cancel_update(query, name):
         raise HttpError(409, f"{name} is not updating")
     job.cancel()
     return job.state()
+
+
+@route("POST", "/projects/(?P<name>[^/]+)/(?P<action>stop|start|restart)")
+def _container_action(query, name, action):
+    ACTIONS.start(require_project(name), action)
+    return {"status": "started"}
+
+
+@route("GET", "/projects/(?P<name>[^/]+)/logs")
+def _logs(query, name):
+    tail = query.get("tail", [""])[0]
+    lines = min(int(tail), MAX_LINES) if tail.isdigit() else DEFAULT_LOG_LINES
+    return container_logs(require_project(name), query.get("container", [None])[0], lines)
 
 
 class Handler(BaseHTTPRequestHandler):

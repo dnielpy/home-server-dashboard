@@ -7,8 +7,10 @@ import { ChartIcon } from "@/components/icons/chart-icon";
 import { DashboardIcon } from "@/components/icons/dashboard-icon";
 import { DevicesIcon } from "@/components/icons/devices-icon";
 import { GaugeIcon } from "@/components/icons/gauge-icon";
+import { GitBranchIcon } from "@/components/icons/git-branch-icon";
 import type { IconProps } from "@/components/icons/icon-props";
 import { RouterIcon } from "@/components/icons/router-icon";
+import { ServerIcon } from "@/components/icons/server-icon";
 import { TrafficIcon } from "@/components/icons/traffic-icon";
 import { WrenchIcon } from "@/components/icons/wrench-icon";
 
@@ -59,5 +61,12 @@ export const NAV_ITEMS: NavEntry[] = [
       { href: "/network/devices", label: "Devices", Icon: DevicesIcon, matchPrefix: true },
     ],
   },
-  { href: "/management", label: "Management", Icon: WrenchIcon },
+  {
+    label: "Settings",
+    Icon: WrenchIcon,
+    children: [
+      { href: "/settings/general", label: "General", Icon: ServerIcon, matchPrefix: true },
+      { href: "/settings/cicd", label: "CI/CD", Icon: GitBranchIcon },
+    ],
+  },
 ];

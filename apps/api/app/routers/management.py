@@ -4,7 +4,15 @@ from fastapi import APIRouter, Query, status
 
 from app.clients import agent
 from app.clients.upstream import UpstreamsDep
-from app.schemas import AgentInfoOut, ProjectDetailOut, ProjectOut, UpdateJobOut, UpstreamErrorOut
+from app.schemas import (
+    AgentInfoOut,
+    ContainerAction,
+    ContainerLogsOut,
+    ProjectDetailOut,
+    ProjectOut,
+    UpdateJobOut,
+    UpstreamErrorOut,
+)
 
 router = APIRouter(
     prefix="/management",
@@ -92,3 +100,34 @@ async def update(name: str, upstreams: UpstreamsDep, offset: Annotated[int, Quer
 )
 async def cancel_update(name: str, upstreams: UpstreamsDep) -> UpdateJobOut:
     return await agent.cancel_update(upstreams.agent, name)
+
+
+@router.post(
+    "/projects/{name}/{action}",
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={
+        **NOT_FOUND,
+        409: {"description": "It has no containers, is updating or already doing one, or is the dashboard to stop"},
+    },
+    description=(
+        "Stops, starts or restarts the project's containers in the background; `action` is pending in /projects "
+        "until it ends."
+    ),
+)
+async def container_action(name: str, action: ContainerAction, upstreams: UpstreamsDep) -> None:
+    await agent.container_action(upstreams.agent, name, action)
+
+
+@router.get(
+    "/projects/{name}/logs",
+    response_model=ContainerLogsOut,
+    responses={404: {"description": "No such project, or it has no container with that name"}},
+    description="The last `tail` lines of one of the project's containers, by its compose service; the first by default.",
+)
+async def logs(
+    name: str,
+    upstreams: UpstreamsDep,
+    container: str | None = None,
+    tail: Annotated[int, Query(ge=1, le=2000)] = 300,
+) -> ContainerLogsOut:
+    return await agent.logs(upstreams.agent, name, container, tail)

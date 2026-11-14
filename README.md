@@ -16,9 +16,11 @@ Dashboard with the stats of every app on the home server, one card each:
 | Server CPU, memory, disks and network right now | Agent `/system` |
 | Server network speed over the last 7 days | Agent `/system/traffic` |
 
-The **Management** page has a card per project on the server (whether its containers are running and since when)
-and an update panel, the web version of `home-server.sh`: it compares each project with GitHub, shows the commits
-it is missing and runs its `scripts/update.sh` to update and redeploy it, following the steps and the output live.
+**Settings** has two pages. **General** has a card per project on the server (whether its containers are running and
+since when) to stop, start or restart its containers and read their logs; the dashboard itself can be restarted but
+not stopped. **CI/CD** is the update panel, the web version of `home-server.sh`: it compares each project with GitHub,
+shows the commits it is missing and runs its `scripts/update.sh` to update and redeploy it, following the steps and
+the output live.
 
 The sidebar also has a module per app, with the pages that app's own web app had, in this dashboard's style:
 
@@ -33,7 +35,7 @@ The sidebar also has a module per app, with the pages that app's own web app had
 apps/
   api/     FastAPI backend: calls the APIs of the other apps and serves what each card needs (no database)
   web/     Next.js frontend
-  agent/   Runs on the server itself, outside Docker: git and docker for the Management page (standard library only)
+  agent/   Runs on the server itself, outside Docker: git and docker for the Settings pages (standard library only)
 turbo.json   Task runner config (Turborepo)
 ```
 
@@ -90,7 +92,7 @@ The web app is published on `WEB_PORT` (3020) and the API on `API_PORT` (3021).
 
 ### Agent
 
-The Management page and the Server cards need the agent running on the host, as the user that owns the projects and
+The Settings pages and the Server cards need the agent running on the host, as the user that owns the projects and
 can use Docker. Once:
 
 ```bash

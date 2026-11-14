@@ -188,6 +188,16 @@ class ServiceStatusOut(BaseModel):
     detail: str | None
 
 
+ContainerAction = Literal["stop", "start", "restart"]
+
+
+class ContainerActionOut(BaseModel):
+    # The last stop, start or restart of its containers from the dashboard
+    name: ContainerAction
+    state: Literal["pending", "ok", "err"]
+    error: str | None
+
+
 class ProjectOut(BaseModel):
     name: str
     path: str
@@ -200,6 +210,9 @@ class ProjectOut(BaseModel):
     remote_epoch: int | None
     service: ServiceStatusOut
     updating: bool
+    action: ContainerActionOut | None = None
+    # The dashboard itself, which can be restarted but not stopped from here
+    dashboard: bool = False
 
 
 class CommitOut(BaseModel):
@@ -249,3 +262,16 @@ class UpdateJobOut(BaseModel):
     total_lines: int
     # The agent's clock, to count the elapsed time without trusting the browser's
     now: float
+
+
+class LogLineOut(BaseModel):
+    time: datetime | None
+    text: str
+
+
+class ContainerLogsOut(BaseModel):
+    # The project's containers, by their compose service
+    containers: list[str]
+    # The one the lines are from, None when the project has no containers
+    container: str | None
+    lines: list[LogLineOut]

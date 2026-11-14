@@ -228,6 +228,24 @@ export type Project = {
   remote_epoch: number | null;
   service: ServiceStatus;
   updating: boolean;
+  /** The last stop, start or restart of its containers from the dashboard. */
+  action: ContainerActionState | null;
+  /** The dashboard itself, which can be restarted but not stopped from here. */
+  dashboard: boolean;
+};
+
+export type ContainerAction = "stop" | "start" | "restart";
+
+export type ContainerActionState = {
+  name: ContainerAction;
+  state: "pending" | "ok" | "err";
+  error: string | null;
+};
+
+export type ContainerLogs = {
+  containers: string[];
+  container: string | null;
+  lines: { time: string | null; text: string }[];
 };
 
 export type Commit = {

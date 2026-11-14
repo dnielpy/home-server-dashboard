@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { CardUnavailable } from "@/components/dashboard/card";
@@ -194,7 +193,6 @@ export function UpdateView({
   now: number | null;
   onDone: () => void;
 }) {
-  const router = useRouter();
   const [job, setJob] = useState<Job | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   // The agent's clock minus the browser's, so the elapsed time does not depend on the browser being right
@@ -263,11 +261,6 @@ export function UpdateView({
       clearTimeout(timer);
     };
   }, [name, start]);
-
-  // The status cards at the top show the new containers
-  useEffect(() => {
-    if (finished) router.refresh();
-  }, [finished, router]);
 
   useEffect(() => {
     if (!cancelArmed) return;

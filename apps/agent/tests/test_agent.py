@@ -294,3 +294,72 @@ def test_http(repos, http) -> None:
     assert request(f"{http}/projects/app/update")[0] == 404
     assert request(f"{http}/projects/app", "POST")[0] == 404
     assert request(f"{http}/info")[1]["root"].endswith("home-server")
+
+
+@pytest.fixture
+def docker(tmp_path, monkeypatch, root):
+    """A fake docker on PATH that logs its arguments; `sleep` makes stop, start and restart take that long."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    calls = tmp_path / "docker-calls"
+    script = bin_dir / "docker"
+    script.write_text(
+        "#!/bin/sh\n"
+        f'echo "$@" >> "{calls}"\n'
+        'case "$1" in\n'
+        '  ps) echo abc123 ;;\n'
+        '  logs) echo "2026-11-13T10:00:00.123Z \033[32mready\033[0m"; echo "2026-11-13T10:00:01.000Z oops" >&2 ;;\n'
+        '  *) sleep "${DOCKER_SLEEP:-0}" ;;\n'
+        "esac\n"
+    )
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setattr(agent, "ACTIONS", agent.Actions())
+    monkeypatch.setattr(
+        agent,
+        "service_status",
+        lambda path, fresh=False: {
+            "deployed": True, "up": True, "since": None, "detail": None,
+            "containers": [{"name": "api"}, {"name": "web"}],
+        },
+    )
+    return lambda: calls.read_text().splitlines()
+
+
+def test_restart_runs_in_the_background(repos, docker, monkeypatch) -> None:
+    monkeypatch.setenv("DOCKER_SLEEP", "0.5")
+    agent.ACTIONS.start("app", "restart")
+    assert agent.summary("app")["action"] == {"name": "restart", "state": "pending", "error": None}
+    with pytest.raises(agent.HttpError) as err:
+        agent.ACTIONS.start("app", "stop")
+    assert (err.value.status, err.value.detail) == (409, "app is already restarting")
+
+    wait_for(lambda: agent.ACTIONS.get("app")["state"] != "pending")
+    assert agent.ACTIONS.get("app")["state"] == "ok"
+    assert "restart abc123" in docker()
+
+
+def test_the_dashboard_cannot_stop_itself(repos, docker, monkeypatch) -> None:
+    monkeypatch.setattr(agent, "SELF", "app")
+    with pytest.raises(agent.HttpError) as err:
+        agent.ACTIONS.start("app", "stop")
+    assert err.value.status == 409
+    assert agent.summary("app")["dashboard"] is True
+
+
+def test_logs_of_a_container(repos, docker) -> None:
+    logs = agent.container_logs("app", None, 50)
+    assert logs["containers"] == ["api", "web"]
+    assert logs["container"] == "api"
+    assert logs["lines"] == [
+        {"time": "2026-11-13T10:00:00Z", "text": "ready"},
+        {"time": "2026-11-13T10:00:01Z", "text": "oops"},
+    ]
+    assert any(call.startswith("ps -aq") and "com.docker.compose.service=api" in call for call in docker())
+    assert "logs --timestamps --tail 50 abc123" in docker()
+
+
+def test_http_container_routes(repos, docker, http) -> None:
+    assert request(f"{http}/projects/app/start", "POST") == (200, {"status": "started"})
+    assert request(f"{http}/projects/app/logs?container=web&tail=10")[1]["container"] == "web"
+    assert request(f"{http}/projects/app/kill", "POST")[0] == 404

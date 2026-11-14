@@ -108,3 +108,33 @@ def test_agent_down(client, upstreams) -> None:
 
     assert response.status_code == 502
     assert response.json()["source"] == "agent"
+
+
+def test_container_actions(client, upstreams) -> None:
+    started = {"status": "started"}
+    calls = upstreams(agent={"/projects/local-tube/restart": started, "/projects/local-tube/stop": started})
+
+    assert client.post("/management/projects/local-tube/restart").status_code == 202
+    assert client.post("/management/projects/local-tube/stop").status_code == 202
+    assert client.post("/management/projects/local-tube/kill").status_code == 422
+    assert [call.url.path for call in calls] == ["/projects/local-tube/restart", "/projects/local-tube/stop"]
+
+
+def test_project_with_an_action(client, upstreams) -> None:
+    action = {"name": "restart", "state": "err", "error": "no such container"}
+    upstreams(agent={"/projects": [{**PROJECT, "action": action, "dashboard": True}]})
+
+    body = client.get("/management/projects").json()
+
+    assert body[0]["action"] == action
+    assert body[0]["dashboard"] is True
+
+
+def test_logs(client, upstreams) -> None:
+    logs = {"containers": ["api", "web"], "container": "web", "lines": [{"time": "2026-11-13T10:00:00Z", "text": "ok"}]}
+    calls = upstreams(agent={"/projects/local-tube/logs": logs})
+
+    body = client.get("/management/projects/local-tube/logs", params={"container": "web", "tail": 50}).json()
+
+    assert body["lines"][0]["text"] == "ok"
+    assert dict(calls[0].url.params) == {"container": "web", "tail": "50"}
