@@ -200,12 +200,12 @@ async function atomicWrite(file, text) {
   await writeFile(temp,text,{mode:0o600});
   await rename(temp,file);
 }
-async function ownSkill(name) {
-  if (!safeName(name)) invalid("Invalid skill name");
+async function ownSkill(name, allowReadOnly = false) {
+  if (!allowReadOnly && !safeName(name)) invalid("Invalid skill name");
   const inventory = await skillInventory();
   const skill = inventory.find((item) => item.name === name);
   if (!skill) throw Object.assign(new Error("Skill not found"), {status:404});
-  if (!skill.editable) throw Object.assign(new Error("Installed skill is read only"), {status:403});
+  if (!skill.editable && !allowReadOnly) throw Object.assign(new Error("Installed skill is read only"), {status:403});
   return skill;
 }
 async function readSkill(name, skill) {
@@ -217,8 +217,7 @@ async function readSkill(name, skill) {
   const status = await gateway.rpc("skills.status", {agentId});
   const match = (status.skills || []).find((item) => item.name === name);
   if (!match) throw Object.assign(new Error("Skill not found"), {status:404});
-  const result = await gateway.rpc("skills.files.get", {agentId,path:match.filePath});
-  return result.content;
+  return readFile(match.filePath,"utf8");
 }
 async function invokeTool(name, args) {
   const result = await gateway.rpc("tools.invoke", {name,args,agentId,idempotencyKey:randomUUID()},60000);
@@ -288,7 +287,7 @@ const server = createServer(async (req,res) => {
       return json(res,201,{ok:true,name:input.name});
     }
     if (path[0] === "skills" && path[1]) {
-      const name = path[1], skill = await ownSkill(name);
+      const name = path[1], skill = await ownSkill(name, req.method === "GET");
       if (req.method === "GET" && path.length === 2) {
         const content = await readSkill(name,skill);
         return json(res,200,{...skill,content,hash:hash(content)});

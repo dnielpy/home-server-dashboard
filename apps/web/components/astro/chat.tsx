@@ -28,7 +28,8 @@ export function AstroChat() {
       const result = await astroApi<{items: AstroSession[]}>("/sessions");
       setSessions(result.items);
       setError(null);
-    } catch (err) { setError(err instanceof Error ? err.message : "No se pudo cargar Astro"); }
+      return result.items;
+    } catch (err) { setError(err instanceof Error ? err.message : "No se pudo cargar Astro"); return null; }
   }, []);
 
   const loadHistory = useCallback(async (id: string) => {
@@ -45,7 +46,16 @@ export function AstroChat() {
     if (!selected) return;
     const initial = setTimeout(() => void loadHistory(selected), 0);
     const source = new EventSource(`/api/astro/sessions/${selected}/events`);
-    source.addEventListener("ready", () => { setConnected(true); setError(null); });
+    source.addEventListener("ready", () => {
+      setConnected(true); setError(null);
+      void loadHistory(selected);
+      void refreshSessions().then((items) => {
+        if (selectedRef.current !== selected || !items) return;
+        const active = !!items.find((session) => session.id === selected)?.hasActiveRun;
+        setBusy(active);
+        if (!active) setStream("");
+      });
+    });
     source.addEventListener("chat", (event) => {
       const payload = JSON.parse((event as MessageEvent).data) as ChatEvent;
       if (payload.state === "delta") {
@@ -70,9 +80,17 @@ export function AstroChat() {
   useEffect(() => { bottom.current?.scrollIntoView({behavior:"smooth",block:"end"}); }, [messages,stream]);
   useEffect(() => {
     if (!busy || !selected) return;
-    const timer = setInterval(() => void loadHistory(selected),5000);
+    const timer = setInterval(() => {
+      void loadHistory(selected);
+      void refreshSessions().then((items) => {
+        if (selectedRef.current !== selected || !items) return;
+        const active = !!items.find((session) => session.id === selected)?.hasActiveRun;
+        setBusy(active);
+        if (!active) setStream("");
+      });
+    },5000);
     return () => clearInterval(timer);
-  }, [busy,selected,loadHistory]);
+  }, [busy,selected,loadHistory,refreshSessions]);
 
   async function createChat() {
     setError(null);
