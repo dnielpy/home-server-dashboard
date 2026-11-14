@@ -8,13 +8,13 @@ import { SenderRefreshProvider } from "@/components/sender/sender-refresh";
 import { Reveal } from "@/components/ui/reveal";
 
 export const metadata: Metadata = {
-  title: "Sender · Home Server",
+  title: "Sender · Tools · Home Server",
 };
 
 export default function Sender() {
   return (
     <SenderRefreshProvider>
-      <Page section="Sender" title="Packages" Icon={SendIcon} actions={<NewPackage />}>
+      <Page section="Tools" title="Sender" Icon={SendIcon} actions={<NewPackage />}>
         <Reveal index={1}>
           <PackagesPanel />
         </Reveal>

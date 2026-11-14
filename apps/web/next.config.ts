@@ -11,6 +11,8 @@ const nextConfig: NextConfig = {
     return [
       { source: "/settings", destination: "/settings/server", permanent: false },
       { source: "/management", destination: "/settings/cicd", permanent: true },
+      { source: "/tools", destination: "/tools/sender", permanent: false },
+      { source: "/sender", destination: "/tools/sender", permanent: true },
     ];
   },
   turbopack: {
