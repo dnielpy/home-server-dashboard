@@ -6,6 +6,7 @@ import { DownloadIcon } from "@/components/icons/download-icon";
 import { PackageIcon } from "@/components/icons/package-icon";
 import { Callout, Spinner } from "@/components/management/parts";
 import { callSender, downloadUrl, SenderRequestError } from "@/components/sender/sender-client";
+import { useSenderRefresh } from "@/components/sender/sender-refresh";
 import { Panel, PanelEmpty } from "@/components/ui/panel";
 import type { SenderFile, SenderPackage, SenderUnlock } from "@/lib/api";
 import { formatBytes, formatSince } from "@/lib/format";
@@ -23,7 +24,8 @@ function message(error: unknown): string {
 }
 
 /** The packages waiting on the server; one opens with its PIN to download its files. */
-export function PackagesPanel({ refreshKey }: { refreshKey: number }) {
+export function PackagesPanel() {
+  const { sent: refreshKey } = useSenderRefresh();
   const [packages, setPackages] = useState<SenderPackage[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   // The package asking for its PIN, and the one whose files are showing
@@ -114,7 +116,7 @@ export function PackagesPanel({ refreshKey }: { refreshKey: number }) {
             <Spinner className="h-3.5 w-3.5 text-violet-500" /> Loading…
           </p>
         )}
-        {packages?.length === 0 && <PanelEmpty height={160}>No packages. Send some files from another device.</PanelEmpty>}
+        {packages?.length === 0 && <PanelEmpty height={160}>No packages. Add one with New package.</PanelEmpty>}
         {packages && packages.length > 0 && (
           <ul className="flex flex-col gap-2">
             {packages.map((pkg) => (
