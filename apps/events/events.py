@@ -234,7 +234,7 @@ class Monitor:
         soc = int(item["battery_percent"])
         if soc <= 98:
             state["battery_armed"] = True
-        elif state.get("battery_armed"):
+        elif soc == 100 and state.get("battery_armed"):
             self.store.event("battery_full", "Bluetti", "Batería", "🔋 La batería llegó al 100 %.", f"battery-full:{item['id']}")
             state["battery_armed"] = False
         self._deferred_outage(state, now)

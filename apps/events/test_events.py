@@ -69,7 +69,9 @@ class MonitorTests(unittest.TestCase):
             self.power(minute, True, 100)
         self.assertEqual(1, self.event_rules().count("power_restored"))
         self.power(25, True, 98)
-        self.power(26, True, 100)
+        self.power(26, True, 99)
+        self.assertEqual(1, self.event_rules().count("battery_full"))
+        self.power(27, True, 100)
         self.assertEqual(2, self.event_rules().count("battery_full"))
 
     def test_downloads_seed_then_notify_terminal_states(self):
