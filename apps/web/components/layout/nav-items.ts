@@ -46,12 +46,12 @@ export function isActive(link: NavLink, pathname: string): boolean {
 
 export const NAV_ITEMS: NavEntry[] = [
   { href: "/", label: "Dashboard", Icon: DashboardIcon },
-  { href: "/events", label: "Events", Icon: BellIcon },
   {
     label: "Astro",
     Icon: AstroIcon,
     children: [
       { href: "/astro/chat", label: "Chat", Icon: SendIcon },
+      { href: "/astro/events", label: "Events", Icon: BellIcon },
       { href: "/astro/skills", label: "Skills", Icon: ToolboxIcon },
       { href: "/astro/memory", label: "Memoria", Icon: AstroIcon },
     ],

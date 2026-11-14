@@ -6,6 +6,14 @@ import remarkGfm from "remark-gfm";
 
 import { astroApi, messageText, type AstroMessage, type AstroSession } from "@/components/astro/api";
 
+function newMessageId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+
 type ChatEvent = { sessionKey?: string; state?: string; runId?: string; deltaText?: string; replace?: boolean; message?: AstroMessage; errorMessage?: string };
 
 export function AstroChat() {
@@ -95,7 +103,7 @@ export function AstroChat() {
   async function createChat() {
     setError(null);
     try {
-      const result = await astroApi<{id:string}>("/sessions",{method:"POST",body:JSON.stringify({idempotencyKey:crypto.randomUUID()})});
+      const result = await astroApi<{id:string}>("/sessions",{method:"POST",body:JSON.stringify({idempotencyKey:newMessageId()})});
       await refreshSessions(); chooseChat(result.id);
     } catch (err) { setError(err instanceof Error ? err.message : "No se pudo crear el chat"); }
   }
@@ -104,7 +112,7 @@ export function AstroChat() {
     if (!selected || !draft.trim() || !connected || busy) return;
     const text = draft.trim();
     const isFirst = messages.length === 0;
-    const key = pendingSend.current?.text === text ? pendingSend.current.key : crypto.randomUUID();
+    const key = pendingSend.current?.text === text ? pendingSend.current.key : newMessageId();
     pendingSend.current = {text,key};
     setDraft(""); setBusy(true); setStream(""); setError(null);
     setMessages((current) => [...current,{role:"user",content:text,timestamp:Date.now()}]);
@@ -141,7 +149,7 @@ export function AstroChat() {
   }
 
   const visible = sessions.filter((session) => showArchived || !session.archived);
-  return <section className="glass flex min-h-[620px] flex-1 overflow-hidden rounded-3xl border border-surface-border md:h-[calc(100dvh-11rem)]">
+  return <section className="flex min-h-0 flex-1 overflow-hidden">
     <aside className="flex w-48 shrink-0 flex-col border-r border-surface-border bg-surface/60 sm:w-64">
       <div className="border-b border-surface-border p-3">
         <button type="button" onClick={() => void createChat()} className="w-full rounded-xl bg-violet-500 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-violet-600">+ Nuevo chat</button>
