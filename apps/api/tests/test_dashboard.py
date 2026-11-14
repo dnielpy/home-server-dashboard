@@ -261,6 +261,10 @@ SYSTEM = {
         "total_rx_bytes": 9_000_000,
         "total_tx_bytes": 1_000_000,
     },
+    "boot": {
+        "booted_at": "2026-11-14T01:31:51+00:00",
+        "last_shutdown": {"at": "2026-11-14T01:31:20+00:00", "clean": True},
+    },
 }
 
 
@@ -273,6 +277,14 @@ def test_system(client, upstreams) -> None:
     assert body["memory"]["percent"] == 25
     assert [disk["name"] for disk in body["disks"]] == ["system"]
     assert (body["network"]["rx_bytes_per_second"], body["network"]["total_rx_bytes"]) == (1_250.5, 9_000_000)
+    assert body["boot"]["booted_at"] == "2026-11-14T01:31:51Z"
+    assert body["boot"]["last_shutdown"]["clean"] is True
+
+
+def test_system_from_an_older_agent(client, upstreams) -> None:
+    upstreams(agent={"/system": {key: value for key, value in SYSTEM.items() if key != "boot"}})
+
+    assert client.get("/dashboard/system").json()["boot"] is None
 
 
 def test_system_away_from_linux(client, upstreams) -> None:

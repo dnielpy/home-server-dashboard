@@ -151,6 +151,20 @@ class TrafficPointOut(BaseModel):
     tx_bytes_per_second: float | None
 
 
+class LastShutdownOut(BaseModel):
+    # When the boot before this one wrote its last line to the journal
+    at: datetime
+    # True when systemd shut it down (a restart or a power off), False when it was cut off (the power went, it hung)
+    clean: bool
+
+
+class BootOut(BaseModel):
+    # None away from Linux
+    booted_at: datetime | None
+    # None when the agent cannot read the journal or there was no boot before
+    last_shutdown: LastShutdownOut | None
+
+
 class SystemOut(BaseModel):
     updated_at: datetime
     # Over the last second; None until the agent has two readings to compare
@@ -160,6 +174,8 @@ class SystemOut(BaseModel):
     # The system disk, and the external one while it is mounted
     disks: list[DiskOut]
     network: SystemNetworkOut
+    # None from an agent older than this field
+    boot: BootOut | None = None
 
 
 class SystemTrafficOut(BaseModel):

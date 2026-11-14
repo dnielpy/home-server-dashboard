@@ -17,6 +17,7 @@ MemFree:          500000 kB
 MemAvailable:    6000000 kB
 Buffers:          100000 kB
 """
+LAST_SHUTDOWN = {"at": "2026-11-14T01:31:20+00:00", "clean": True}
 DISK = {"name": "system", "mount": "/", "total_bytes": 100, "used_bytes": 40, "available_bytes": 60, "percent": 40.0}
 
 
@@ -31,7 +32,7 @@ class FakeProc:
         self.set(cpu=(100, 100, 50, 700, 50), rx=1_000, tx=500)
 
     def set(self, cpu: tuple[int, ...], rx: int, tx: int, interface: str = "eth0") -> None:
-        (self.root / "stat").write_text(f"cpu  {' '.join(map(str, cpu))} 0 0 0 0 0\ncpu0 1 2 3 4\n")
+        (self.root / "stat").write_text(f"cpu  {' '.join(map(str, cpu))} 0 0 0 0 0\ncpu0 1 2 3 4\nbtime 1794619911\n")
         (self.root / "net/dev").write_text(
             "Inter-|   Receive                                                |  Transmit\n"
             " face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets\n"
@@ -48,7 +49,9 @@ def proc(tmp_path: Path) -> FakeProc:
 
 
 def monitor(tmp_path: Path, proc: FakeProc) -> metrics.Monitor:
-    return metrics.Monitor(tmp_path / "metrics.sqlite3", proc=proc.root, disks=lambda: [DISK])
+    return metrics.Monitor(
+        tmp_path / "metrics.sqlite3", proc=proc.root, disks=lambda: [DISK], last_shutdown=lambda: LAST_SHUTDOWN
+    )
 
 
 def test_reads_the_default_interface_and_memory(proc) -> None:
@@ -169,3 +172,37 @@ def test_without_localtube_there_is_no_external_disk(tmp_path) -> None:
 def test_the_mount_point_is_the_nearest_mounted_folder(tmp_path) -> None:
     assert metrics.mount_point("/") == "/"
     assert os.path.ismount(metrics.mount_point(str(tmp_path)))
+
+
+def test_boot_time_and_how_the_last_boot_ended(tmp_path, proc) -> None:
+    calls = []
+    m = metrics.Monitor(
+        tmp_path / "metrics.sqlite3", proc=proc.root, disks=lambda: [], last_shutdown=lambda: calls.append(1) or None
+    )
+    m.sample()
+    assert m.current()["boot"] == {"booted_at": "2026-11-14T01:31:51+00:00", "last_shutdown": None}
+    m.current()
+    # The journal is read once
+    assert calls == [1]
+
+
+def journal(monkeypatch, boots: str | None, tail: str | None) -> None:
+    monkeypatch.setattr(metrics, "_journalctl", lambda *args: boots if args[0] == "--list-boots" else tail)
+
+
+def test_last_shutdown_on_purpose(monkeypatch) -> None:
+    boots = '[{"index": -1, "last_entry": 1794619880000000}, {"index": 0, "last_entry": 1794620000000000}]'
+    journal(monkeypatch, boots, "Nov 13 21:31:19 host systemd-shutdown[1]: Syncing filesystems and block devices.\n")
+    assert metrics.read_last_shutdown() == {"at": "2026-11-14T01:31:20+00:00", "clean": True}
+
+
+def test_last_shutdown_cut_off(monkeypatch) -> None:
+    journal(monkeypatch, '[{"index": -1, "last_entry": 1794619880000000}]', "Nov 13 21:31:19 host kernel: usb 1-1\n")
+    assert metrics.read_last_shutdown()["clean"] is False
+
+
+def test_no_journal_no_last_shutdown(monkeypatch) -> None:
+    journal(monkeypatch, None, None)
+    assert metrics.read_last_shutdown() is None
+    journal(monkeypatch, '[{"index": 0, "last_entry": 1}]', "")
+    assert metrics.read_last_shutdown() is None

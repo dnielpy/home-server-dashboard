@@ -166,6 +166,19 @@ export type System = {
     total_rx_bytes: number;
     total_tx_bytes: number;
   };
+  /** Null from an agent older than this field. */
+  boot: Boot | null;
+};
+
+export type Boot = {
+  /** Null away from Linux. */
+  booted_at: string | null;
+  /** How the boot before this one ended; null when the agent cannot read the journal. */
+  last_shutdown: {
+    at: string;
+    /** True when systemd shut it down (a restart or a power off), false when it was cut off (power lost, hung). */
+    clean: boolean;
+  } | null;
 };
 
 export type SystemTraffic = {

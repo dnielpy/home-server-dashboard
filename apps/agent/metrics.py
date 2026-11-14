@@ -1,4 +1,4 @@
-"""The server's CPU, memory, disks and network, read from /proc and the filesystems the way top and df do.
+"""The server's CPU, memory, disks, network and boot, read from /proc and the filesystems the way top and df do.
 
 A thread samples every second, so the CPU use and the network speed are the ones of the last second instead of since
 boot, and the dashboard can show them changing live. Every 5 minutes it also stores the network speed in a SQLite file, for the traffic of the last week, and
@@ -8,8 +8,10 @@ library, like the agent.
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
+import subprocess
 import threading
 import time
 from dataclasses import dataclass
@@ -34,6 +36,10 @@ CPU_FIELDS = 8
 IDLE_FIELDS = (3, 4)
 # A default route is up when this bit of its flags is set
 RTF_UP = 0x1
+# What the last lines of a boot in the journal have when systemd shut it down (a restart or a power off) instead of it
+# being cut off (the power went, it hung)
+CLEAN_SHUTDOWN_MARKERS = ("systemd-shutdown", "Shutting down.")
+SHUTDOWN_TAIL_LINES = 200
 
 
 def _iso(epoch: float) -> str:
@@ -58,6 +64,42 @@ def read_cpu(proc: Path = PROC) -> tuple[int, int] | None:
             total = sum(ticks)
             return total - sum(ticks[i] for i in IDLE_FIELDS if i < len(ticks)), total
     return None
+
+
+def read_boot_time(proc: Path = PROC) -> float | None:
+    """When the server booted, as Unix seconds; None away from Linux."""
+    for line in (_read(proc / "stat") or "").splitlines():
+        if line.startswith("btime "):
+            return float(line.split()[1])
+    return None
+
+
+def _journalctl(*args: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["journalctl", "--no-pager", "-q", *args],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            stdin=subprocess.DEVNULL,
+            env={**os.environ, "LC_ALL": "C"},
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return result.stdout if result.returncode == 0 else None
+
+
+def read_last_shutdown() -> dict[str, Any] | None:
+    """How the boot before this one ended, from the journal: when it wrote its last line and whether systemd shut it
+    down. None without journalctl, permission to read it (the adm group) or an earlier boot."""
+    try:
+        boots = json.loads(_journalctl("--list-boots", "-o", "json") or "null")
+        previous = next(boot for boot in boots if boot["index"] == -1)
+        ended = previous["last_entry"] / 1_000_000
+    except (ValueError, TypeError, KeyError, StopIteration):
+        return None
+    tail = _journalctl("-b", "-1", "-o", "short", "-n", str(SHUTDOWN_TAIL_LINES)) or ""
+    return {"at": _iso(ended), "clean": any(marker in tail for marker in CLEAN_SHUTDOWN_MARKERS)}
 
 
 def read_memory(proc: Path = PROC) -> dict[str, Any] | None:
@@ -188,9 +230,13 @@ def _delta(current: int, last: int) -> int:
 class Monitor:
     """Samples the server on its own thread and answers the dashboard from the last samples."""
 
-    def __init__(self, database: Path, proc: Path = PROC, disks=read_disks) -> None:
+    def __init__(self, database: Path, proc: Path = PROC, disks=read_disks, last_shutdown=read_last_shutdown) -> None:
         self.proc = proc
         self.disks = disks
+        # Read once, the first time it is asked for: it does not change until the next boot, which restarts the agent
+        self.read_last_shutdown = last_shutdown
+        self.last_shutdown: dict[str, Any] | None = None
+        self.last_shutdown_read = False
         self.lock = threading.Lock()
         self.db = sqlite3.connect(database, check_same_thread=False)
         self.db.executescript(
@@ -268,7 +314,15 @@ class Monitor:
                 )
             self.db.execute("DELETE FROM traffic WHERE at < ?", (reading.at - RETENTION_SECONDS,))
 
+    def boot(self) -> dict[str, Any]:
+        if not self.last_shutdown_read:
+            self.last_shutdown = self.read_last_shutdown()
+            self.last_shutdown_read = True
+        booted = read_boot_time(self.proc)
+        return {"booted_at": _iso(booted) if booted is not None else None, "last_shutdown": self.last_shutdown}
+
     def current(self) -> dict[str, Any]:
+        boot = self.boot()
         with self.lock:
             last = self.last
             rates = self.rates
@@ -284,6 +338,7 @@ class Monitor:
                     "total_rx_bytes": self.totals[0],
                     "total_tx_bytes": self.totals[1],
                 },
+                "boot": boot,
             }
 
     def traffic(self, now: float | None = None) -> dict[str, Any]:
