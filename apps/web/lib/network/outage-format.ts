@@ -1,8 +1,11 @@
+import { TIME_ZONE } from "@/lib/time-zone";
+
 
 const TICK_STEPS = [0.25, 0.5, 1, 2, 4, 6, 12, 24, 48];
 const MAX_TICKS = 6;
 
 const dateTimeFormat = new Intl.DateTimeFormat("en-GB", {
+  timeZone: TIME_ZONE,
   day: "numeric",
   month: "short",
   hour: "2-digit",

@@ -1,7 +1,9 @@
 import type { Column, Row } from "@/components/ui/data-table";
 import { buildAverageRows, type Sample } from "@/lib/energy/time-series";
+import { TIME_ZONE } from "@/lib/time-zone";
 
 const timeFormat = new Intl.DateTimeFormat("en-GB", {
+  timeZone: TIME_ZONE,
   day: "numeric",
   month: "short",
   hour: "2-digit",

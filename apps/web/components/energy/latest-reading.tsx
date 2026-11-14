@@ -6,8 +6,9 @@ import { PowerFlow } from "@/components/energy/power-flow/power-flow";
 import { BoltIcon } from "@/components/icons/bolt-icon";
 import { Panel } from "@/components/ui/panel";
 import { getLatestSummary } from "@/lib/bluetti-api";
+import { TIME_ZONE } from "@/lib/time-zone";
 
-const timeFormat = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "medium" });
+const timeFormat = new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, dateStyle: "medium", timeStyle: "medium" });
 
 /** The power flow of the Bluetti's latest reading. */
 export async function LatestReading() {

@@ -11,6 +11,7 @@ import { Panel, PanelEmpty } from "@/components/ui/panel";
 import { RangeFilter } from "@/components/ui/range-filter";
 import { getDailyHistory } from "@/lib/homenet-api";
 import { DAY_RANGES, parseTimeRange } from "@/lib/network/time-ranges";
+import { TIME_ZONE } from "@/lib/time-zone";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -29,7 +30,8 @@ function formatUptime({ measuredMs, onlineMs }: { measuredMs: number; onlineMs: 
 function formatDay(dayStart: number, index: number): string {
   if (index === 0) return "Today";
   if (index === 1) return "Yesterday";
-  return new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short" }).format(dayStart);
+  const format = new Intl.DateTimeFormat(undefined, { timeZone: TIME_ZONE, weekday: "short", day: "numeric", month: "short" });
+  return format.format(dayStart);
 }
 
 /** Online and offline periods per day, today first: each bar runs from 00:00 to midnight, whatever the time is now. */

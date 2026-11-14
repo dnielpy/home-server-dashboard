@@ -6,11 +6,12 @@ import { ToneTile } from "@/components/ui/tone-tile";
 import { getConnectionStatus } from "@/lib/homenet-api";
 import { hopLabel } from "@/lib/network/hops";
 import { formatElapsed } from "@/lib/network/outage-format";
+import { TIME_ZONE } from "@/lib/time-zone";
 
 const HOUR_MS = 3_600_000;
 
-const timeFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
-const dayFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
+const timeFormat = new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+const dayFormat = new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, day: "numeric", month: "short" });
 
 function hoursValue(hours: number): string {
   return hours > 0 ? formatElapsed(hours * HOUR_MS) : "None";

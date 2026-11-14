@@ -6,12 +6,13 @@ import { Panel } from "@/components/ui/panel";
 import { ToneTile } from "@/components/ui/tone-tile";
 import { getPowerTotals, type PowerTotals } from "@/lib/bluetti-api";
 import { formatElapsed } from "@/lib/energy/blackout-format";
+import { TIME_ZONE } from "@/lib/time-zone";
 
 const HOUR_MS = 3_600_000;
 const WINDOW_HOURS = 24;
 
-const timeFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
-const dayFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
+const timeFormat = new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+const dayFormat = new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, day: "numeric", month: "short" });
 
 /** When the power last went out, and whether it is still out. */
 function lastOutage(totals: PowerTotals) {

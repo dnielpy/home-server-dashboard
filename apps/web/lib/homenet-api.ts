@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 
 import { SourceUnavailableError } from "@/lib/api";
+import { onWallClock } from "@/lib/time-zone";
 
 // The Network pages read the Home Net API straight from this server, as its own web app did
 
@@ -119,23 +120,20 @@ export type DailyHistory = {
 export async function getDailyHistory(days: number): Promise<DailyHistory> {
   await connection();
   const fetchedAt = Date.now();
-  const today = new Date(fetchedAt);
-  today.setHours(0, 0, 0, 0);
-  const starts = Array.from({ length: days }, (_, index) => {
-    const start = new Date(today);
-    start.setDate(start.getDate() - index);
-    return start;
-  });
-  const first = starts.at(-1)!.getTime();
+  // Midnights on the dashboard's clock, not the server's
+  const starts = Array.from({ length: days }, (_, index) =>
+    onWallClock(fetchedAt, (wall) => {
+      wall.setUTCHours(0, 0, 0, 0);
+      wall.setUTCDate(wall.getUTCDate() - index);
+    }),
+  );
+  const first = starts.at(-1)!;
   // Enough hours back to reach the first midnight
   const hours = Math.max(1, Math.ceil((fetchedAt - first) / 3_600_000));
   const segments: Segment[] = await getJson(`/connection-history?hours=${hours}`);
   return {
-    days: starts.map((start) => {
-      const end = new Date(start);
-      end.setDate(end.getDate() + 1);
-      const dayStart = start.getTime();
-      const dayEnd = end.getTime();
+    days: starts.map((dayStart) => {
+      const dayEnd = onWallClock(dayStart, (wall) => wall.setUTCDate(wall.getUTCDate() + 1));
       return {
         segments: segments.filter((segment) => Date.parse(segment.end) > dayStart && Date.parse(segment.start) < dayEnd),
         dayStart,

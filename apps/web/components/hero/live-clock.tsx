@@ -2,8 +2,15 @@
 
 import { useEffect, useState } from "react";
 
-const timeFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
-const dateFormat = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long" });
+import { TIME_ZONE, wallClock } from "@/lib/time-zone";
+
+const timeFormat = new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+const dateFormat = new Intl.DateTimeFormat("en-GB", {
+  timeZone: TIME_ZONE,
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
 
 function greeting(hour: number): string {
   if (hour < 5) return "Good night";
@@ -12,8 +19,8 @@ function greeting(hour: number): string {
   return "Good evening";
 }
 
-/** The greeting, date and time of the browser, ticking every few seconds. Rendered after mount so the server's
- * clock and timezone never show. */
+/** The greeting, date and time on the dashboard's clock (TIME_ZONE), ticking every few seconds. Rendered after mount
+ * so the server's clock never shows. */
 export function LiveClock() {
   const [now, setNow] = useState<Date | null>(null);
 
@@ -26,7 +33,7 @@ export function LiveClock() {
 
   return (
     <div className="min-h-16">
-      <p className="text-base text-muted sm:text-lg">{now ? `${greeting(now.getHours())} · ${dateFormat.format(now)}` : " "}</p>
+      <p className="text-base text-muted sm:text-lg">{now ? `${greeting(wallClock(now).getUTCHours())} · ${dateFormat.format(now)}` : " "}</p>
       <p className="mt-1 bg-linear-to-r from-foreground to-muted bg-clip-text text-6xl font-semibold tracking-tight text-transparent leading-none tabular-nums sm:text-7xl xl:text-9xl">
         {now ? timeFormat.format(now) : " "}
       </p>

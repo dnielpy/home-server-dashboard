@@ -1,6 +1,8 @@
+import { TIME_ZONE } from "@/lib/time-zone";
+
 const UNITS = ["B", "KB", "MB", "GB", "TB"];
 
-const clockFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+const clockFormat = new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit" });
 
 export function formatBytes(bytes: number): string {
   let value = bytes;
@@ -54,14 +56,14 @@ export function splitBytes(bytes: number): { value: number; unit: string; digits
   return { value, unit: UNITS[unit], digits: unit === 0 || value >= 100 ? 0 : 1 };
 }
 
-const hourFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+const hourFormat = new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit" });
 
 /** A chart axis label, e.g. 14:00. */
 export function formatHour(value: string | number): string {
   return hourFormat.format(new Date(value));
 }
 
-const dayFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
+const dayFormat = new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, day: "numeric", month: "short" });
 
 /** A past moment as 14:05 when it was today, or 12 Nov, 14:05 before that. */
 export function formatSince(value: string | number, now = Date.now()): string {
@@ -100,6 +102,7 @@ export function formatStopwatch(seconds: number): string {
 }
 
 const commitDateFormat = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: TIME_ZONE,
   year: "numeric",
   month: "2-digit",
   day: "2-digit",

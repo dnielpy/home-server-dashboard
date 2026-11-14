@@ -6,11 +6,12 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 import { ChartTooltip } from "@/components/charts/chart-tooltip";
 import { AXIS, COLORS } from "@/components/charts/chart-theme";
 import { formatBitsPerSecond, formatSince } from "@/lib/format";
+import { TIME_ZONE } from "@/lib/time-zone";
 
 export type TrafficChartPoint = { at: number; rx: number | null; tx: number | null };
 
 const DAY = 24 * 3_600_000;
-const dayFormat = new Intl.DateTimeFormat("en-GB", { weekday: "short" });
+const dayFormat = new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, weekday: "short" });
 
 function bits(bytesPerSecond: number): string {
   const { value, unit } = formatBitsPerSecond(bytesPerSecond);

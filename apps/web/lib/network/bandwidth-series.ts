@@ -1,21 +1,22 @@
 import type { BandwidthBucket, BandwidthPoint } from "@/lib/homenet-api";
+import { onWallClock, TIME_ZONE } from "@/lib/time-zone";
 
 export type BandwidthBar = { start: number; end: number; rx: number; tx: number; hasData: boolean };
 
 function bucketStart(t: number, bucket: BandwidthBucket): number {
-  const date = new Date(t);
-  if (bucket === "day") date.setHours(0, 0, 0, 0);
-  else if (bucket === "hour") date.setMinutes(0, 0, 0);
-  else date.setMinutes(Math.floor(date.getMinutes() / 10) * 10, 0, 0);
-  return date.getTime();
+  return onWallClock(t, (wall) => {
+    if (bucket === "day") wall.setUTCHours(0, 0, 0, 0);
+    else if (bucket === "hour") wall.setUTCMinutes(0, 0, 0);
+    else wall.setUTCMinutes(Math.floor(wall.getUTCMinutes() / 10) * 10, 0, 0);
+  });
 }
 
 function nextBucket(t: number, bucket: BandwidthBucket): number {
-  const date = new Date(t);
-  if (bucket === "day") date.setDate(date.getDate() + 1);
-  else if (bucket === "hour") date.setHours(date.getHours() + 1);
-  else date.setMinutes(date.getMinutes() + 10);
-  return date.getTime();
+  return onWallClock(t, (wall) => {
+    if (bucket === "day") wall.setUTCDate(wall.getUTCDate() + 1);
+    else if (bucket === "hour") wall.setUTCHours(wall.getUTCHours() + 1);
+    else wall.setUTCMinutes(wall.getUTCMinutes() + 10);
+  });
 }
 
 /** One entry per 10 minutes, hour or day in the range; `hasData` is false where no traffic sample was stored. */
@@ -40,5 +41,5 @@ export function formatBucket(t: number, bucket: BandwidthBucket, long = false): 
           minute: "2-digit",
           hour12: false,
         };
-  return new Intl.DateTimeFormat(undefined, options).format(t);
+  return new Intl.DateTimeFormat(undefined, { ...options, timeZone: TIME_ZONE }).format(t);
 }
