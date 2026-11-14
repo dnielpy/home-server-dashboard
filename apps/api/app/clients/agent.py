@@ -8,6 +8,7 @@ from app.schemas import (
     AgentInfoOut,
     ContainerAction,
     ContainerLogsOut,
+    PowerAction,
     ProjectDetailOut,
     ProjectOut,
     SystemOut,
@@ -15,8 +16,9 @@ from app.schemas import (
     UpdateJobOut,
 )
 
-# The agent's answers for a project that does not exist or an update that cannot start or stop now
-PASSED_THROUGH = {404, 409}
+# The agent's answers for a project that does not exist, something that cannot start or stop now, or a reboot it is
+# not allowed to do
+PASSED_THROUGH = {403, 404, 409}
 
 
 def _project(name: str) -> str:
@@ -71,6 +73,10 @@ async def container_action(upstream: Upstream, name: str, action: ContainerActio
 async def logs(upstream: Upstream, name: str, container: str | None, tail: int) -> ContainerLogsOut:
     body = await _call(upstream, "GET", f"{_project(name)}/logs", container=container, tail=tail)
     return ContainerLogsOut.model_validate(body)
+
+
+async def power(upstream: Upstream, action: PowerAction) -> None:
+    await _call(upstream, "POST", f"/power/{action}")
 
 
 async def system(upstream: Upstream) -> SystemOut:

@@ -3,7 +3,7 @@
 
 Does what home-server.sh does: lists the folders with a git repo next to the dashboard's, compares them with GitHub
 and updates and redeploys them with their own scripts/update.sh. It also tells whether each one's containers are
-running and since when, stops, starts and restarts them and reads their logs, and the server's CPU, memory, disks and network (metrics.py). Only uses the standard library,
+running and since when, stops, starts and restarts them and reads their logs, reboots or powers off the server, and the server's CPU, memory, disks and network (metrics.py). Only uses the standard library,
 so it runs with the python3 of the host.
 
 Usage: python3 agent.py   (ROOT, AGENT_PORT, STATE_DIR, SYSTEM_DISK_MOUNT and EXTERNAL_DISK_MOUNT can be set in the
@@ -16,6 +16,7 @@ import getpass
 import json
 import os
 import re
+import shutil
 import signal
 import socket
 import subprocess
@@ -310,6 +311,32 @@ def container_logs(name: str, service: str | None, tail: int) -> dict[str, Any]:
         if line is not None:
             lines.append({"time": _docker_time(stamp), "text": line})
     return {"containers": services, "container": service, "lines": lines}
+
+
+# --- Power ----------------------------------------------------------------------------------------------------------
+
+# Seconds between answering and rebooting or powering off, so the answer gets back to the dashboard
+POWER_DELAY_SECONDS = 3
+
+
+def power(action: str) -> None:
+    """Reboots or powers off the whole server, with `sudo -n systemctl`: install-agent.sh allows only those two."""
+    updating = [name for name in project_names() if (job := JOBS.get(name)) is not None and job.running()]
+    if updating:
+        raise HttpError(409, f"{', '.join(updating)} is updating; wait for it to end")
+    systemctl = shutil.which("systemctl") or "/usr/bin/systemctl"
+    allowed = run(["sudo", "-n", "-l", systemctl, action], timeout=10)
+    if allowed.returncode != 0:
+        raise HttpError(
+            403, f"The agent is not allowed to run systemctl {action}; run ./scripts/install-agent.sh again on the server"
+        )
+    subprocess.Popen(
+        ["sh", "-c", f'sleep {POWER_DELAY_SECONDS}; exec sudo -n "$0" "$1"', systemctl, action],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
 
 
 # --- Projects -------------------------------------------------------------------------------------------------------
@@ -693,6 +720,12 @@ def _cancel_update(query, name):
 @route("POST", "/projects/(?P<name>[^/]+)/(?P<action>stop|start|restart)")
 def _container_action(query, name, action):
     ACTIONS.start(require_project(name), action)
+    return {"status": "started"}
+
+
+@route("POST", "/power/(?P<action>reboot|poweroff)")
+def _power(query, action):
+    power(action)
     return {"status": "started"}
 
 

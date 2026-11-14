@@ -16,7 +16,8 @@ Dashboard with the stats of every app on the home server, one card each:
 | Server CPU, memory, disks and network right now | Agent `/system` |
 | Server network speed over the last 7 days | Agent `/system/traffic` |
 
-**Settings** has two pages. **General** has a card per project on the server (whether its containers are running and
+**Settings** has three pages. **Server** has the server's CPU, memory, disks and network, and buttons to restart or
+power off the whole server, each asking first. **General** has a card per project on the server (whether its containers are running and
 since when) to stop, start or restart its containers and read their logs; the dashboard itself can be restarted but
 not stopped. **CI/CD** is the update panel, the web version of `home-server.sh`: it compares each project with GitHub,
 shows the commits it is missing and runs its `scripts/update.sh` to update and redeploy it, following the steps and
@@ -99,6 +100,9 @@ can use Docker. Once:
 ./scripts/install-agent.sh            # installs and starts the home-server-agent user service
 sudo loginctl enable-linger "$USER"   # so it starts on boot without logging in
 ```
+
+`install-agent.sh` also asks for your password once to write `/etc/sudoers.d/home-server-agent`, which lets the
+agent run `systemctl reboot` and `systemctl poweroff` as root, and nothing else.
 
 It manages every folder with a git repo next to this one (`~/home-server/*`) and listens on port 3022, where the API
 container reaches it through `host.docker.internal` (`AGENT_URL`). It has no authentication: keep that port inside the

@@ -138,3 +138,18 @@ def test_logs(client, upstreams) -> None:
 
     assert body["lines"][0]["text"] == "ok"
     assert dict(calls[0].url.params) == {"container": "web", "tail": "50"}
+
+
+def test_power(client, upstreams) -> None:
+    calls = upstreams(
+        agent={
+            "/power/reboot": {"status": "started"},
+            "/power/poweroff": (403, {"detail": "The agent is not allowed to run systemctl poweroff"}),
+        }
+    )
+
+    assert client.post("/management/power/reboot").status_code == 202
+    denied = client.post("/management/power/poweroff")
+    assert (denied.status_code, denied.json()["detail"]) == (403, "The agent is not allowed to run systemctl poweroff")
+    assert client.post("/management/power/halt").status_code == 422
+    assert [call.url.path for call in calls] == ["/power/reboot", "/power/poweroff"]

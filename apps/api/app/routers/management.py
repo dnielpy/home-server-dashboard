@@ -8,6 +8,7 @@ from app.schemas import (
     AgentInfoOut,
     ContainerAction,
     ContainerLogsOut,
+    PowerAction,
     ProjectDetailOut,
     ProjectOut,
     UpdateJobOut,
@@ -26,6 +27,19 @@ NOT_FOUND = {404: {"description": "There is no project with that name"}}
 @router.get("/info", response_model=AgentInfoOut, description="The user, host and folder the agent manages.")
 async def info(upstreams: UpstreamsDep) -> AgentInfoOut:
     return await agent.info(upstreams.agent)
+
+
+@router.post(
+    "/power/{action}",
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={
+        403: {"description": "The agent is not allowed to run systemctl reboot or poweroff"},
+        409: {"description": "A project is updating"},
+    },
+    description="Reboots or powers off the whole server a few seconds after answering.",
+)
+async def power(action: PowerAction, upstreams: UpstreamsDep) -> None:
+    await agent.power(upstreams.agent, action)
 
 
 @router.get(

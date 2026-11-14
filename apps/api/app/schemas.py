@@ -189,6 +189,7 @@ class ServiceStatusOut(BaseModel):
 
 
 ContainerAction = Literal["stop", "start", "restart"]
+PowerAction = Literal["reboot", "poweroff"]
 
 
 class ContainerActionOut(BaseModel):

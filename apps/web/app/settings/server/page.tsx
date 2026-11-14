@@ -11,6 +11,7 @@ import { ServerTrafficHistoryCard } from "@/components/dashboard/server-traffic-
 import { SystemLiveProvider } from "@/components/dashboard/system-live";
 import { GaugeIcon } from "@/components/icons/gauge-icon";
 import { Page } from "@/components/layout/page";
+import { PowerControls } from "@/components/settings/power-controls";
 import { Reveal } from "@/components/ui/reveal";
 
 const REFRESH_INTERVAL_MS = 30_000;
@@ -29,7 +30,7 @@ function Slot({ index, className, children }: { index: number; className: string
 
 export default function ServerSettings() {
   return (
-    <Page section="Settings" title="Server" Icon={GaugeIcon}>
+    <Page section="Settings" title="Server" Icon={GaugeIcon} actions={<PowerControls />}>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-6 xl:grid-cols-12">
         {/* CPU, memory, disks and network update every second; the weekly chart with the rest of the page */}
         <SystemLiveProvider>

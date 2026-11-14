@@ -327,7 +327,7 @@ def docker(tmp_path, monkeypatch, root):
 
 
 def test_restart_runs_in_the_background(repos, docker, monkeypatch) -> None:
-    monkeypatch.setenv("DOCKER_SLEEP", "0.5")
+    monkeypatch.setenv("DOCKER_SLEEP", "3")
     agent.ACTIONS.start("app", "restart")
     assert agent.summary("app")["action"] == {"name": "restart", "state": "pending", "error": None}
     with pytest.raises(agent.HttpError) as err:
@@ -363,3 +363,52 @@ def test_http_container_routes(repos, docker, http) -> None:
     assert request(f"{http}/projects/app/start", "POST") == (200, {"status": "started"})
     assert request(f"{http}/projects/app/logs?container=web&tail=10")[1]["container"] == "web"
     assert request(f"{http}/projects/app/kill", "POST")[0] == 404
+
+
+@pytest.fixture
+def sudo(tmp_path, monkeypatch, root):
+    """A fake sudo on PATH that logs what it runs; `-l` fails unless SUDO_ALLOWED is set."""
+    bin_dir = tmp_path / "sudo-bin"
+    bin_dir.mkdir()
+    calls = tmp_path / "sudo-calls"
+    script = bin_dir / "sudo"
+    script.write_text(
+        "#!/bin/sh\n"
+        f'echo "$@" >> "{calls}"\n'
+        'if [ "$2" = "-l" ] && [ -z "$SUDO_ALLOWED" ]; then exit 1; fi\n'
+    )
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setattr(agent, "POWER_DELAY_SECONDS", 0)
+    return lambda: calls.read_text().splitlines() if calls.exists() else []
+
+
+def test_power_without_permission(sudo) -> None:
+    with pytest.raises(agent.HttpError) as err:
+        agent.power("reboot")
+    assert err.value.status == 403
+    assert not any(call.endswith(" reboot") and "-l" not in call for call in sudo())
+
+
+def test_power_reboots(sudo, monkeypatch) -> None:
+    monkeypatch.setenv("SUDO_ALLOWED", "1")
+    agent.power("poweroff")
+    wait_for(lambda: len(sudo()) == 2)
+    check, run = sudo()
+    assert check.startswith("-n -l ") and check.endswith("systemctl poweroff")
+    assert run.startswith("-n ") and run.endswith("systemctl poweroff") and "-l" not in run
+
+
+def test_no_power_off_while_updating(repos, sudo, monkeypatch) -> None:
+    server, _ = repos
+    write_update_script(server, "sleep 30\n")
+    agent.JOBS.start("app")
+    with pytest.raises(agent.HttpError) as err:
+        agent.power("reboot")
+    assert (err.value.status, err.value.detail) == (409, "app is updating; wait for it to end")
+    agent.JOBS.get("app").cancel()
+
+
+def test_http_power(sudo, http) -> None:
+    assert request(f"{http}/power/reboot", "POST")[0] == 403
+    assert request(f"{http}/power/halt", "POST")[0] == 404
