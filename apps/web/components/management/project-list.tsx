@@ -91,7 +91,7 @@ export function ProjectList({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col items-center gap-2 py-4 text-center">
-        <p className="bg-linear-to-r from-cyan-400 via-blue-500 to-violet-500 bg-clip-text text-4xl font-black tracking-[0.2em] text-transparent sm:text-5xl">
+        <p className="bg-linear-to-r from-cyan-400 via-blue-500 to-violet-500 bg-clip-text text-3xl font-black tracking-[0.2em] text-transparent sm:text-5xl">
           HOME SERVER
         </p>
         <p className="text-sm text-muted">

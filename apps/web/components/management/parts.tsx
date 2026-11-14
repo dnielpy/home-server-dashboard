@@ -12,10 +12,10 @@ export function Spinner({ className = "h-3.5 w-3.5" }: { className?: string }) {
   );
 }
 
-/** A key and what it does, for the panel's footer. */
+/** A key and what it does, for the panel's footer. Hidden on phones, which have no keyboard. */
 export function KeyHint({ keys, label }: { keys: string; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-muted">
+    <span className="hidden items-center gap-1.5 text-xs text-muted sm:inline-flex">
       <kbd className="rounded-md border border-surface-border bg-surface px-1.5 py-0.5 font-mono text-[11px] text-foreground shadow-[inset_0_-1px_0_var(--surface-border)]">
         {keys}
       </kbd>
@@ -135,10 +135,15 @@ export function PanelButton({
   );
 }
 
-/** The bar at the bottom of the panel with the keys of the screen, like the script's footer. */
-export function PanelFooter({ children }: { children: ReactNode }) {
+/**
+ * The bar at the bottom of the panel with the keys of the screen, like the script's footer. `keysOnly` hides it on
+ * phones, where the key hints are hidden and it would be left empty.
+ */
+export function PanelFooter({ keysOnly, children }: { keysOnly?: boolean; children: ReactNode }) {
   return (
-    <div className="-mx-5 -mb-5 mt-2 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-surface-border bg-surface/60 px-5 py-3 sm:-mx-8 sm:-mb-6 sm:px-8">
+    <div
+      className={`-mx-5 -mb-5 mt-2 flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-surface-border bg-surface/60 px-5 py-3 sm:-mx-8 sm:-mb-6 sm:px-8 ${keysOnly ? "hidden sm:flex" : "flex"}`}
+    >
       {children}
     </div>
   );

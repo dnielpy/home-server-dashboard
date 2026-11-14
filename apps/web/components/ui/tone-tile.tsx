@@ -46,7 +46,7 @@ export function ToneTile({ tone, label, value, detail, aside, live }: ToneTilePr
 
   return (
     <div
-      className={`glass glass-glow ${style.tile} relative rounded-2xl p-4 ${aside ? "grid grid-cols-2 gap-4" : ""}`}
+      className={`glass glass-glow ${style.tile} relative rounded-2xl p-4 ${aside ? "grid grid-cols-2 gap-4" : ""} ${live && aside ? "pt-10 sm:pt-4" : ""}`}
     >
       {live && (
         <span

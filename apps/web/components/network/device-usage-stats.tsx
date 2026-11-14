@@ -72,16 +72,19 @@ export async function DeviceUsageStats({ searchParams }: { searchParams: SearchP
               const kind = deviceKind(device.name);
               const total = device.down_bytes + device.up_bytes;
               return (
-                <li key={device.mac} className="flex h-10 items-center">
-                  {/* On phones only the icon shows, so the bars get the width; the name stays for screen readers */}
+                <li
+                  key={device.mac}
+                  className="flex flex-col items-stretch gap-1 py-1.5 sm:h-10 sm:flex-row sm:gap-0 sm:items-center sm:py-0"
+                >
+                  {/* On phones the name goes above its bar, so the bar keeps the whole width */}
                   <Link
                     href={`/network/devices/${encodeURIComponent(device.mac)}`}
                     title={device.name || device.mac}
-                    className="flex w-8 shrink-0 items-center gap-2 pr-3 text-sm text-muted transition-colors hover:text-foreground sm:w-48"
+                    className="flex w-full min-w-0 shrink-0 items-center gap-2 pr-3 text-sm text-muted transition-colors hover:text-foreground sm:w-48"
                   >
                     <DeviceKindIcon kind={kind} className="h-4 w-4 shrink-0" />
                     <span className="sr-only">{KIND_LABELS[kind]}:</span>
-                    <span className={`sr-only truncate sm:not-sr-only ${device.name ? "" : "font-mono text-xs"}`}>
+                    <span className={`truncate ${device.name ? "" : "font-mono text-xs"}`}>
                       {device.name || device.mac}
                     </span>
                   </Link>

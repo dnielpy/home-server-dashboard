@@ -276,7 +276,7 @@ export function ProjectDetailView({
         </PanelButton>
       </div>
 
-      <PanelFooter>
+      <PanelFooter keysOnly>
         <KeyHint keys="←→" label="choose" />
         <KeyHint keys="enter" label="confirm" />
         <KeyHint keys="esc" label="back" />

@@ -31,11 +31,15 @@ export const ACTIVE_STYLES: Record<Direction, { circle: string; stroke: string }
   },
 };
 
+// On a phone the icons stay 52 px wide, wider than 13 %, so the text starts after half of that plus a gap
+const NEAR_LEFT = "left-[24%] @max-[24rem]:left-[calc(15%+34px)]";
+const NEAR_RIGHT = "right-[24%] @max-[24rem]:right-[calc(15%+34px)]";
+
 export const CORNER_POSITION: Record<Corner, { node: string; text: string }> = {
-  "top-left": { node: "left-[15%] top-[15%]", text: "left-[24%] top-[15%] items-start" },
-  "top-right": { node: "left-[85%] top-[15%]", text: "right-[24%] top-[15%] items-end" },
-  "bottom-left": { node: "left-[15%] top-[85%]", text: "left-[24%] top-[85%] items-start" },
-  "bottom-right": { node: "left-[85%] top-[85%]", text: "right-[24%] top-[85%] items-end" },
+  "top-left": { node: "left-[15%] top-[15%]", text: `${NEAR_LEFT} top-[15%] items-start` },
+  "top-right": { node: "left-[85%] top-[15%]", text: `${NEAR_RIGHT} top-[15%] items-end` },
+  "bottom-left": { node: "left-[15%] top-[85%]", text: `${NEAR_LEFT} top-[85%] items-start` },
+  "bottom-right": { node: "left-[85%] top-[85%]", text: `${NEAR_RIGHT} top-[85%] items-end` },
 };
 
 export function buildFlowNodes(summary: Summary): FlowNodeData[] {

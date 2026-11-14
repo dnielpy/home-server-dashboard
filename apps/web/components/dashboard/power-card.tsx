@@ -25,7 +25,7 @@ function Stat({ dot, label, hours }: { dot: string; label: string; hours: number
         <span aria-hidden className={`h-2 w-2 rounded-full ${dot}`} />
         {label}
       </p>
-      <p className="mt-1 text-4xl font-semibold tracking-tight text-foreground tabular-nums xl:text-5xl">
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-foreground tabular-nums sm:text-4xl xl:text-5xl">
         {formatHours(hours)}
       </p>
     </div>
@@ -55,7 +55,7 @@ export async function PowerCard() {
       {recorded === 0 ? (
         <p className="text-sm text-muted">No readings in the last 24 hours.</p>
       ) : (
-        <div className="grid flex-1 grid-cols-2 items-center gap-6">
+        <div className="grid flex-1 grid-cols-2 items-center gap-4 sm:gap-6">
           <div className="flex justify-center">
             <PowerDonut
               withPower={data.with_power_hours}

@@ -75,7 +75,7 @@ export function StatusTile({
             <p className="truncate text-lg font-semibold text-foreground tabular-nums">
               {formatElapsedSince(status.since)}
             </p>
-            <p className="truncate text-xs text-muted tabular-nums">
+            <p className="text-xs text-muted tabular-nums sm:truncate">
               {status.state === "up" ? "Up" : "Down"} since {formatSince(status.since)}
             </p>
           </>

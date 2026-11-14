@@ -51,7 +51,7 @@ export function DisksCard() {
 
   return (
     <Card title="Disks" Icon={DiskIcon} accent="sky">
-      <div className="grid flex-1 grid-cols-2 items-center gap-6">
+      <div className="grid flex-1 grid-cols-1 items-center gap-6 sm:grid-cols-2">
         {DISKS.map(({ name, label, detail }, index) => (
           <DiskStats
             key={name}
