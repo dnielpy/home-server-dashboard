@@ -31,6 +31,10 @@ The sidebar also has a module per app, with the pages that app's own web app had
 | **Network** | Live (connection chain and the Nano's download speed every second), Speed test (fast.com), Local speed (from the browser to this server), Stats (connection status, online/offline per day, top devices, bandwidth, outages), Devices (live list with block, limit and rename, and each device's history) | Home Net API |
 | **Tools** | Sender: drop files to upload them and send them as a package with a name and a 4 digit PIN; another device on the network opens it with the PIN and downloads its files one by one, and once every file is downloaded the package is deleted from the server. Downloads: paste a link and the server downloads it by itself, retrying every cut and resuming from the bytes it has (also after a restart or a blackout); a finished file has a Download button for the device, which can resume too | This API, on the external disk (`SENDER_DIR`, `DOWNLOADS_DIR`) |
 
+**Events** is a separate host service. It watches both download queues, Bluetti readings and Docker containers,
+stores events in `~/.local/state/home-server-events/events.sqlite3`, and sends Telegram notifications through
+OpenClaw without invoking a model. The Events page controls each alert and shows delivery status.
+
 ## Structure
 
 ```
@@ -38,6 +42,7 @@ apps/
   api/     FastAPI backend: calls the APIs of the other apps and serves what each card needs (no database)
   web/     Next.js frontend
   agent/   Runs on the server itself, outside Docker: git and docker for the Settings pages (standard library only)
+  events/  Runs on the host: event polling, SQLite history and Telegram delivery (standard library only)
 turbo.json   Task runner config (Turborepo)
 ```
 
@@ -115,5 +120,20 @@ the end so it runs the new code; logs with `journalctl --user -u home-server-age
 
 For the Server cards it reads the host's `/proc` and its disks itself, and the cards ask for them every second: CPU
 and network speed over the last second, memory, the system disk (`/`) and the external one while it is mounted: the
-disk LocalTube keeps its videos on (`MEDIA_PATH` in `local-tube/.env.production`), or `EXTERNAL_DISK_MOUNT` when set. Every 5 minutes it stores the network speed and the bytes carried in `metrics.sqlite3` in its state folder,
-for the 7 day chart and totals that keep adding up across reboots.
+disk LocalTube keeps its videos on (`MEDIA_PATH` in `local-tube/.env.production`), or `EXTERNAL_DISK_MOUNT` when set.
+Every 5 minutes it stores the network speed and the bytes carried in `metrics.sqlite3` in its state folder, for the
+7 day chart and totals that keep adding up across reboots.
+
+### Telegram events
+
+Update LocalTube first so `/api/stats/downloads/terminal` is available, then on the server run:
+
+```bash
+TELEGRAM_CHAT_ID=<your-telegram-id> ./scripts/install-events.sh
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build --wait
+```
+
+The installer generates a private `EVENTS_API_TOKEN` in `.env.production`, configures the existing OpenClaw CLI and
+state directory, and enables the user service. The dashboard API receives the same token. Keep port 3023 inside the
+home network. Check the monitor with `systemctl --user status home-server-events` and
+`journalctl --user -u home-server-events -f`. The Events page can queue a Telegram test message.

@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from app.clients.upstream import UpstreamError, Upstreams
 from app.config import get_settings
 from app.downloader import Downloader
-from app.routers import dashboard, downloads, health, management, sender
+from app.routers import dashboard, downloads, events, health, management, sender
 from app.sender import SenderStore, remove_old_drafts
 from app.status import StatusTracker, watch
 
@@ -36,6 +36,7 @@ app.include_router(dashboard.router)
 app.include_router(management.router)
 app.include_router(sender.router)
 app.include_router(downloads.router)
+app.include_router(events.router)
 
 
 @app.exception_handler(UpstreamError)

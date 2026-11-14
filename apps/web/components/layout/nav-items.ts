@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 
 import { BatteryIcon } from "@/components/icons/battery-icon";
+import { BellIcon } from "@/components/icons/bell-icon";
 import { BlackoutIcon } from "@/components/icons/blackout-icon";
 import { BoltIcon } from "@/components/icons/bolt-icon";
 import { ChartIcon } from "@/components/icons/chart-icon";
@@ -44,6 +45,7 @@ export function isActive(link: NavLink, pathname: string): boolean {
 
 export const NAV_ITEMS: NavEntry[] = [
   { href: "/", label: "Dashboard", Icon: DashboardIcon },
+  { href: "/events", label: "Events", Icon: BellIcon },
   {
     label: "Energy",
     Icon: BoltIcon,
