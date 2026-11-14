@@ -1,4 +1,5 @@
 import json
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -96,6 +97,23 @@ class MonitorTests(unittest.TestCase):
         with patch.object(events.subprocess, "run", return_value=success):
             self.monitor.send_due()
         self.assertEqual("sent", self.store.list_events(1, 0)["items"][0]["delivery_status"])
+
+    def test_timeout_never_retries_automatically(self):
+        self.store.event("battery_full", "Bluetti", "Batería", "full", "key")
+        with patch.object(events.subprocess, "run", side_effect=subprocess.TimeoutExpired("openclaw", 120)) as run:
+            self.monitor.send_due()
+            self.monitor.send_due()
+        self.assertEqual(1, run.call_count)
+        item = self.store.list_events(1, 0)["items"][0]
+        self.assertEqual("uncertain", item["delivery_status"])
+        self.assertEqual(1, item["attempts"])
+
+    def test_restart_during_send_pauses_delivery(self):
+        self.store.event("battery_full", "Bluetti", "Batería", "full", "key")
+        self.assertIsNotNone(self.store.claim_due())
+        self.store = events.Store(self.store.path)
+        self.assertIsNone(self.store.claim_due())
+        self.assertEqual("uncertain", self.store.list_events(1, 0)["items"][0]["delivery_status"])
 
     def test_container_down_recovers_and_planned_stop_is_silent(self):
         def sample(at, status, action=None):

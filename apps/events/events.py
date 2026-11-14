@@ -76,6 +76,11 @@ class Store:
                 CREATE INDEX IF NOT EXISTS events_retry ON events(delivery_status, next_retry_at);
             """)
             db.executemany("INSERT OR IGNORE INTO rules(id, enabled) VALUES (?, 1)", [(x,) for x in RULES])
+            # A process can die after Telegram accepts a message but before we save its ID.
+            # Such deliveries need review; retrying them could send the alert twice.
+            db.execute("""UPDATE events SET delivery_status='uncertain',
+                          last_error='El monitor se reinició durante el envío; comprueba Telegram antes de reenviar.'
+                          WHERE delivery_status='sending'""")
 
     @contextmanager
     def connect(self):
@@ -131,10 +136,12 @@ class Store:
             total = db.execute("SELECT count(*) FROM events").fetchone()[0]
         return {"items": [dict(row) for row in rows], "total": total}
 
-    def due(self):
+    def claim_due(self):
         with self.connect() as db:
             row = db.execute("""SELECT id,message FROM events WHERE delivery_status IN ('pending','retry')
                                 AND next_retry_at<=? ORDER BY id LIMIT 1""", (time.time(),)).fetchone()
+            if row:
+                db.execute("UPDATE events SET delivery_status='sending' WHERE id=?", (row["id"],))
         return dict(row) if row else None
 
     def delivered(self, event_id: int, message_id: str | None):
@@ -149,6 +156,11 @@ class Store:
             delay = min(3600, 30 * 2 ** min(attempts - 1, 7))
             db.execute("""UPDATE events SET delivery_status='retry',attempts=?,next_retry_at=?,
                           last_error=? WHERE id=?""", (attempts, time.time() + delay, error[:500], event_id))
+
+    def uncertain(self, event_id: int, error: str):
+        with self.connect() as db:
+            db.execute("""UPDATE events SET delivery_status='uncertain',attempts=attempts+1,
+                          last_error=? WHERE id=?""", (error[:500], event_id))
 
 
 class Monitor:
@@ -336,20 +348,31 @@ class Monitor:
                              f"🟢 Contenedor recuperado: {key}.", f"container-restored:{key}:{int(now)}")
 
     def send_due(self):
-        row = self.store.due()
+        row = self.store.claim_due()
         if not row:
             return
         command = [self.config["OPENCLAW_BIN"], "message", "send", "--channel", "telegram", "--target",
                    self.config["TELEGRAM_CHAT_ID"], "--message", row["message"], "--json"]
         try:
-            result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=40,
+            result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=120,
                                     env={**os.environ, "OPENCLAW_STATE_DIR": self.config["OPENCLAW_STATE_DIR"]})
-            output = json.loads(result.stdout) if result.stdout.strip().startswith("{") else {}
-            if result.returncode != 0 or output.get("ok") is False:
-                raise RuntimeError(output.get("error") or result.stderr.strip() or "OpenClaw did not confirm delivery")
+            try:
+                output = json.loads(result.stdout) if result.stdout.strip().startswith("{") else {}
+            except ValueError:
+                output = {}
+            if output.get("ok") is False:
+                raise RuntimeError(output.get("error") or result.stderr.strip() or "OpenClaw rechazó el envío")
+            if result.returncode != 0:
+                self.store.uncertain(row["id"], result.stderr.strip() or "OpenClaw terminó con error; Telegram podría haber recibido el aviso.")
+                return
             message_id = output.get("messageId") or output.get("message_id") or output.get("id")
+            if not message_id and output.get("ok") is not True:
+                self.store.uncertain(row["id"], "OpenClaw terminó sin confirmar el envío; comprueba Telegram.")
+                return
             self.store.delivered(row["id"], str(message_id) if message_id else None)
-        except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
+        except subprocess.TimeoutExpired:
+            self.store.uncertain(row["id"], "OpenClaw agotó el tiempo de espera; Telegram podría haber recibido el aviso.")
+        except (OSError, RuntimeError) as error:
             self.store.failed(row["id"], str(error))
 
 

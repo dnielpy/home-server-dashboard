@@ -137,3 +137,6 @@ The installer generates a private `EVENTS_API_TOKEN` in `.env.production`, confi
 state directory, and enables the user service. The dashboard API receives the same token. Keep port 3023 inside the
 home network. Check the monitor with `systemctl --user status home-server-events` and
 `journalctl --user -u home-server-events -f`. The Events page can queue a Telegram test message.
+Explicit delivery failures retry automatically. If OpenClaw times out or the monitor restarts during a send, the
+event shows **Delivery unconfirmed** and pauses retries: Telegram may already have received it, so inspect the chat
+before sending another test.

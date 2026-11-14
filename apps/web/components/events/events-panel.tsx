@@ -13,7 +13,7 @@ type Event = {
   subject: string;
   message: string;
   occurred_at: string;
-  delivery_status: "pending" | "retry" | "sent";
+  delivery_status: "pending" | "sending" | "retry" | "sent" | "uncertain";
   attempts: number;
   last_error: string | null;
 };
@@ -108,8 +108,8 @@ export function EventsPanel() {
                 <span className="text-xs text-muted">{new Date(event.occurred_at).toLocaleString()}</span>
               </div>
               <p className="mt-1 whitespace-pre-wrap text-sm text-muted">{event.message}</p>
-              <p className={`mt-2 text-xs font-medium ${event.delivery_status === "sent" ? "text-emerald-600 dark:text-emerald-400" : event.delivery_status === "retry" ? "text-amber-600 dark:text-amber-400" : "text-muted"}`}>
-                {event.delivery_status === "sent" ? "Sent to Telegram" : event.delivery_status === "retry" ? `Retrying (${event.attempts} attempts)` : "Pending delivery"}
+              <p className={`mt-2 text-xs font-medium ${event.delivery_status === "sent" ? "text-emerald-600 dark:text-emerald-400" : event.delivery_status === "retry" || event.delivery_status === "uncertain" ? "text-amber-600 dark:text-amber-400" : "text-muted"}`}>
+                {event.delivery_status === "sent" ? "Sent to Telegram" : event.delivery_status === "retry" ? `Retrying (${event.attempts} attempts)` : event.delivery_status === "uncertain" ? "Delivery unconfirmed; check Telegram" : event.delivery_status === "sending" ? "Sending to Telegram" : "Pending delivery"}
                 {event.last_error && ` · ${event.last_error}`}
               </p>
             </li>
