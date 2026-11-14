@@ -1,0 +1,11 @@
+import { type IconProps, outlineIconProps } from "@/components/icons/icon-props";
+
+export function PackageIcon({ className }: IconProps) {
+  return (
+    <svg {...outlineIconProps} className={className} aria-hidden>
+      <path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" />
+      <path d="m4 7.5 8 4.5 8-4.5" />
+      <path d="M12 12v9" />
+    </svg>
+  );
+}

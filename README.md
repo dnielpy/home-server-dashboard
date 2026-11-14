@@ -29,6 +29,7 @@ The sidebar also has a module per app, with the pages that app's own web app had
 |---|---|---|
 | **Energy** | Live (power flow of the latest reading), Battery (battery level, AC output, runtime estimate), Blackouts (power status and the longest blackouts and periods with power) | Bluetti API |
 | **Network** | Live (connection chain and the Nano's download speed every second), Speed test (fast.com), Local speed (from the browser to this server), Stats (connection status, online/offline per day, top devices, bandwidth, outages), Devices (live list with block, limit and rename, and each device's history) | Home Net API |
+| **Sender** | Packages: drop files to upload them and send them as a package with a name and a 4 digit PIN; another device on the network opens it with the PIN and downloads its files one by one, and once every file is downloaded the package is deleted from the server | This API, on the external disk (`SENDER_DIR`) |
 
 ## Structure
 
@@ -84,12 +85,14 @@ pnpm dev
 ## Production
 
 ```bash
-cp .env.production.example .env.production   # fill in LOCALTUBE_SERVICE_TOKEN
+cp .env.production.example .env.production   # fill in LOCALTUBE_SERVICE_TOKEN and SENDER_HOST_DIR
 ./scripts/update.sh
 ```
 
 The API container reaches the other apps through the ports they publish on the host (`host.docker.internal`).
 The web app is published on `WEB_PORT` (3020) and the API on `API_PORT` (3021).
+Sender's packages go to `SENDER_HOST_DIR`, a folder on the external disk that the API container's user (uid 10001)
+can write to: `sudo mkdir -p <folder> && sudo chown 10001 <folder>`.
 
 ### Agent
 

@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
 
 BatteryState = Literal["full", "charging", "discharging", "idle", "unknown"]
 
@@ -292,3 +292,40 @@ class ContainerLogsOut(BaseModel):
     # The one the lines are from, None when the project has no containers
     container: str | None
     lines: list[LogLineOut]
+
+
+class SenderFileOut(BaseModel):
+    id: str
+    name: str
+    size: int
+    downloaded: bool
+
+
+class SenderDraftOut(BaseModel):
+    id: str
+    files: list[SenderFileOut]
+
+
+class SenderPackageOut(BaseModel):
+    id: str
+    name: str
+    created_at: datetime
+    # The files still waiting to be downloaded and their size; the names are only shown after the PIN
+    file_count: int
+    total_bytes: int
+
+
+class SenderUnlockOut(BaseModel):
+    package: SenderPackageOut
+    files: list[SenderFileOut]
+    # Downloads the package's files (?token=) for half an hour
+    token: str
+
+
+class SenderSealIn(BaseModel):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+    pin: Annotated[str, StringConstraints(pattern=r"^\d{4}$")]
+
+
+class SenderPinIn(BaseModel):
+    pin: Annotated[str, StringConstraints(pattern=r"^\d{4}$")]

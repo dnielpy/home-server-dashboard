@@ -20,6 +20,10 @@ services:
       # The agent that updates the projects runs on the host itself (scripts/install-agent.sh)
       AGENT_URL: ${AGENT_URL:-http://host.docker.internal:3022}
       UPSTREAM_TIMEOUT_SECONDS: ${UPSTREAM_TIMEOUT_SECONDS:-8}
+      SENDER_DIR: /data/sender
+    volumes:
+      # Sender's packages, on the external disk; the folder has to be writable by the container's user (uid 10001)
+      - ${SENDER_HOST_DIR:?Set SENDER_HOST_DIR to a folder on the external disk for Sender}:/data/sender
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

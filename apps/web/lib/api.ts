@@ -32,6 +32,38 @@ export async function forward(path: string, method: "GET" | "POST"): Promise<Res
   });
 }
 
+// The headers a file upload or download needs to pass through whole
+const PROXIED_HEADERS = ["Content-Type", "Content-Length", "Content-Disposition", "Cache-Control", "Retry-After"];
+
+/** Like forward(), but streams the request's body to the API and the API's answer back, with its file headers. */
+export async function proxy(path: string, request: Request): Promise<Response> {
+  // Only the type: a streamed body goes chunked, so the size travels in the query (?size=) instead
+  const headers = new Headers();
+  const type = request.headers.get("Content-Type");
+  if (type !== null) headers.set("Content-Type", type);
+  let response: Response;
+  try {
+    response = await fetch(apiUrl(path), {
+      method: request.method,
+      headers,
+      body: request.body,
+      // Node's fetch needs this to send a body that is a stream
+      duplex: "half",
+      cache: "no-store",
+      // A download the browser cancels stops reading from the API too, so the file is not deleted
+      signal: request.signal,
+    } as RequestInit);
+  } catch {
+    return Response.json({ detail: "Could not reach the dashboard API" }, { status: 503 });
+  }
+  const out = new Headers();
+  for (const name of PROXIED_HEADERS) {
+    const value = response.headers.get(name);
+    if (value !== null) out.set(name, value);
+  }
+  return new Response(response.body, { status: response.status, headers: out });
+}
+
 async function getJson<T>(path: string): Promise<T> {
   await connection();
   let response: Response;
@@ -302,3 +334,26 @@ export type UpdateJob = {
 export function getProjects(): Promise<Project[]> {
   return getJson<Project[]>("/management/projects");
 }
+
+export type SenderFile = {
+  id: string;
+  name: string;
+  size: number;
+  downloaded: boolean;
+};
+
+export type SenderPackage = {
+  id: string;
+  name: string;
+  created_at: string;
+  /** The files still waiting to be downloaded and their size. */
+  file_count: number;
+  total_bytes: number;
+};
+
+export type SenderUnlock = {
+  package: SenderPackage;
+  files: SenderFile[];
+  /** Downloads the package's files for half an hour. */
+  token: string;
+};

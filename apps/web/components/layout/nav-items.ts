@@ -10,6 +10,7 @@ import { GaugeIcon } from "@/components/icons/gauge-icon";
 import { GitBranchIcon } from "@/components/icons/git-branch-icon";
 import type { IconProps } from "@/components/icons/icon-props";
 import { RouterIcon } from "@/components/icons/router-icon";
+import { SendIcon } from "@/components/icons/send-icon";
 import { ServerIcon } from "@/components/icons/server-icon";
 import { TrafficIcon } from "@/components/icons/traffic-icon";
 import { WrenchIcon } from "@/components/icons/wrench-icon";
@@ -61,6 +62,7 @@ export const NAV_ITEMS: NavEntry[] = [
       { href: "/network/devices", label: "Devices", Icon: DevicesIcon, matchPrefix: true },
     ],
   },
+  { href: "/sender", label: "Sender", Icon: SendIcon },
   {
     label: "Settings",
     Icon: WrenchIcon,

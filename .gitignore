@@ -10,3 +10,6 @@ node_modules/
 .DS_Store
 
 .turbo/
+
+# Sender packages in development (apps/api)
+apps/api/data/
