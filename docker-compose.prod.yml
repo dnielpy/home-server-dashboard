@@ -19,8 +19,6 @@ services:
       LOCALTUBE_SERVICE_TOKEN: ${LOCALTUBE_SERVICE_TOKEN:?Set LOCALTUBE_SERVICE_TOKEN to LocalTube's SERVICE_TOKEN}
       # The agent that updates the projects runs on the host itself (scripts/install-agent.sh)
       AGENT_URL: ${AGENT_URL:-http://host.docker.internal:3022}
-      EVENTS_API_URL: ${EVENTS_API_URL:-http://host.docker.internal:3023}
-      EVENTS_API_TOKEN: ${EVENTS_API_TOKEN:?Set EVENTS_API_TOKEN in .env.production}
       ASTRO_API_URL: ${ASTRO_API_URL:-http://host.docker.internal:3024}
       ASTRO_API_TOKEN: ${ASTRO_API_TOKEN:?Set ASTRO_API_TOKEN in .env.production}
       UPSTREAM_TIMEOUT_SECONDS: ${UPSTREAM_TIMEOUT_SECONDS:-8}

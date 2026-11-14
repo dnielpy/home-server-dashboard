@@ -2,7 +2,6 @@ import type { ComponentType } from "react";
 
 import { BatteryIcon } from "@/components/icons/battery-icon";
 import { AstroIcon } from "@/components/icons/astro-icon";
-import { BellIcon } from "@/components/icons/bell-icon";
 import { BlackoutIcon } from "@/components/icons/blackout-icon";
 import { BoltIcon } from "@/components/icons/bolt-icon";
 import { ChartIcon } from "@/components/icons/chart-icon";
@@ -51,7 +50,6 @@ export const NAV_ITEMS: NavEntry[] = [
     Icon: AstroIcon,
     children: [
       { href: "/astro/chat", label: "Chat", Icon: SendIcon },
-      { href: "/astro/events", label: "Events", Icon: BellIcon },
       { href: "/astro/skills", label: "Skills", Icon: ToolboxIcon },
       { href: "/astro/memory", label: "Memoria", Icon: AstroIcon },
     ],
