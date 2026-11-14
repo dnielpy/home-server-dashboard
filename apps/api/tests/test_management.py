@@ -32,7 +32,7 @@ JOB = {
     "finished_at": None,
     "hash": None,
     "steps": [{"label": "Stopping containers", "started_at": 1763040000.6, "finished_at": None}],
-    "expected_steps": ["Stopping containers", "Pulling latest code", "Building and starting containers"],
+    "expected_steps": ["Pulling latest code", "Building images", "Stopping containers", "Starting containers"],
     "lines": ["==> Stopping containers"],
     "offset": 1,
     "total_lines": 1,

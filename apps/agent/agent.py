@@ -36,7 +36,7 @@ PORT = int(os.environ.get("AGENT_PORT", "3022"))
 STATE_DIR = Path(os.environ.get("STATE_DIR") or Path.home() / ".local/state/home-server-agent")
 
 # The steps every project's update.sh prints, before it has printed them
-EXPECTED_STEPS = ["Stopping containers", "Pulling latest code", "Building and starting containers"]
+EXPECTED_STEPS = ["Pulling latest code", "Building images", "Stopping containers", "Starting containers"]
 STEP_PREFIX = "==> "
 # Exit code written for an update cancelled from the dashboard, the one of a Ctrl+C
 CANCELLED_CODE = 130
