@@ -117,7 +117,7 @@ class MonitorTests(unittest.TestCase):
         self.assertIsNone(self.store.claim_due())
         self.assertEqual("uncertain", self.store.list_events(1, 0)["items"][0]["delivery_status"])
 
-    def test_container_down_recovers_and_planned_stop_is_silent(self):
+    def test_manual_stop_alerts_and_recovery(self):
         def sample(at, status, action=None):
             project = {"name": "localtube", "updating": False, "action": action,
                        "service": {"containers": [{"name": "api", "status": status, "health": "healthy" if status == "running" else None}]}}
@@ -126,14 +126,26 @@ class MonitorTests(unittest.TestCase):
 
         sample(1000, "running")
         sample(1010, "exited", {"name": "stop", "state": "pending"})
-        sample(1100, "exited", {"name": "stop", "state": "ok"})
         self.assertEqual([], self.event_rules())
-        sample(1300, "exited")
-        sample(1361, "exited")
+        sample(1071, "exited", {"name": "stop", "state": "ok"})
         self.assertEqual(["container_down"], self.event_rules())
-        sample(1400, "running")
-        sample(1461, "running")
+        sample(1100, "running", {"name": "start", "state": "pending"})
+        sample(1230, "running", {"name": "start", "state": "ok"})
+        sample(1291, "running", {"name": "start", "state": "ok"})
         self.assertEqual(["container_restored", "container_down"], self.event_rules())
+
+    def test_planned_restart_stays_silent(self):
+        def sample(at, status, action=None):
+            project = {"name": "localtube", "updating": False, "action": action,
+                       "service": {"containers": [{"name": "api", "status": status, "health": "healthy" if status == "running" else None}]}}
+            with patch.object(events.time, "time", return_value=at), patch.object(self.monitor, "get_json", return_value=[project]):
+                self.monitor.poll_containers()
+
+        sample(1000, "running")
+        sample(1010, "exited", {"name": "restart", "state": "pending"})
+        sample(1071, "exited", {"name": "restart", "state": "ok"})
+        sample(1150, "running", {"name": "restart", "state": "ok"})
+        self.assertEqual([], self.event_rules())
 
     def test_private_http_api_lists_and_toggles_fixed_rules(self):
         server = ThreadingHTTPServer(("127.0.0.1", 0), events.make_handler(self.monitor))

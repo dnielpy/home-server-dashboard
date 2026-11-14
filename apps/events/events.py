@@ -303,11 +303,13 @@ class Monitor:
         for project in projects:
             name = project["name"]
             action = project.get("action") or {}
-            maintenance = bool(project.get("updating")) or action.get("state") == "pending"
+            # A stop requested in the dashboard is an alertable outage too. Only
+            # starts, restarts and deployments get a maintenance grace period.
+            manual_stop = action.get("name") == "stop"
+            maintenance = bool(project.get("updating")) or (action.get("state") == "pending" and not manual_stop)
             if maintenance:
                 self.store.set(f"maintenance:{name}", now + MAINTENANCE_GRACE_SECONDS)
-            planned_stop = action.get("name") == "stop" and action.get("state") == "ok"
-            if maintenance or planned_stop or now < self.store.get(f"maintenance:{name}", 0):
+            if maintenance or (not manual_stop and now < self.store.get(f"maintenance:{name}", 0)):
                 skipped.add(name)
                 continue
             for container in project["service"].get("containers", []):
