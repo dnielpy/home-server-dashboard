@@ -6,6 +6,7 @@ import { BoltIcon } from "@/components/icons/bolt-icon";
 import { ChartIcon } from "@/components/icons/chart-icon";
 import { DashboardIcon } from "@/components/icons/dashboard-icon";
 import { DevicesIcon } from "@/components/icons/devices-icon";
+import { DownloadIcon } from "@/components/icons/download-icon";
 import { GaugeIcon } from "@/components/icons/gauge-icon";
 import { GitBranchIcon } from "@/components/icons/git-branch-icon";
 import type { IconProps } from "@/components/icons/icon-props";
@@ -75,6 +76,9 @@ export const NAV_ITEMS: NavEntry[] = [
   {
     label: "Tools",
     Icon: ToolboxIcon,
-    children: [{ href: "/tools/sender", label: "Sender", Icon: SendIcon }],
+    children: [
+      { href: "/tools/sender", label: "Sender", Icon: SendIcon },
+      { href: "/tools/downloads", label: "Downloads", Icon: DownloadIcon },
+    ],
   },
 ];

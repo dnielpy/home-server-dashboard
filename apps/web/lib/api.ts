@@ -32,15 +32,28 @@ export async function forward(path: string, method: "GET" | "POST"): Promise<Res
   });
 }
 
-// The headers a file upload or download needs to pass through whole
-const PROXIED_HEADERS = ["Content-Type", "Content-Length", "Content-Disposition", "Cache-Control", "Retry-After"];
+// The headers a file upload or download needs to pass through whole, and the ones a browser resumes a download with
+const PROXIED_HEADERS = [
+  "Content-Type",
+  "Content-Length",
+  "Content-Disposition",
+  "Cache-Control",
+  "Retry-After",
+  "Accept-Ranges",
+  "Content-Range",
+  "ETag",
+  "Last-Modified",
+];
+const PROXIED_REQUEST_HEADERS = ["Content-Type", "Range", "If-Range"];
 
 /** Like forward(), but streams the request's body to the API and the API's answer back, with its file headers. */
 export async function proxy(path: string, request: Request): Promise<Response> {
-  // Only the type: a streamed body goes chunked, so the size travels in the query (?size=) instead
+  // Not the length: a streamed body goes chunked, so the size travels in the query (?size=) instead
   const headers = new Headers();
-  const type = request.headers.get("Content-Type");
-  if (type !== null) headers.set("Content-Type", type);
+  for (const name of PROXIED_REQUEST_HEADERS) {
+    const value = request.headers.get(name);
+    if (value !== null) headers.set(name, value);
+  }
   let response: Response;
   try {
     response = await fetch(apiUrl(path), {
@@ -356,4 +369,28 @@ export type SenderUnlock = {
   files: SenderFile[];
   /** Downloads the package's files for half an hour. */
   token: string;
+};
+
+export type ServerDownloadState = "queued" | "downloading" | "paused" | "done" | "failed";
+
+/** A file the server downloads by itself (Tools › Downloads). */
+export type ServerDownload = {
+  id: string;
+  url: string;
+  name: string;
+  state: ServerDownloadState;
+  /** The whole file's size, null until the server it comes from says it. */
+  size: number | null;
+  /** The bytes already on the server; a download goes on from here. */
+  received: number;
+  /** Bytes per second over the last few seconds. */
+  speed: number;
+  /** The last cut while it is retried, or why it failed. */
+  error: string | null;
+  attempts: number;
+  max_attempts: number;
+  /** When the next try is, while it waits after a cut. */
+  retry_at: string | null;
+  created_at: string;
+  finished_at: string | null;
 };

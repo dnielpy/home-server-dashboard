@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime
 from typing import Annotated, Literal
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import AfterValidator, BaseModel, StringConstraints
 
 BatteryState = Literal["full", "charging", "discharging", "idle", "unknown"]
 
@@ -329,3 +330,37 @@ class SenderSealIn(BaseModel):
 
 class SenderPinIn(BaseModel):
     pin: Annotated[str, StringConstraints(pattern=r"^\d{4}$")]
+
+
+class DownloadOut(BaseModel):
+    id: str
+    url: str
+    name: str
+    state: Literal["queued", "downloading", "paused", "done", "failed"]
+    # The whole file's size, None until the server says it
+    size: int | None
+    # The bytes already on the server; a download goes on from here
+    received: int
+    # Bytes per second over the last few seconds
+    speed: float
+    # The last cut while it is retried, or why it failed
+    error: str | None
+    attempts: int
+    max_attempts: int
+    # When the next try is, while it waits after a cut
+    retry_at: datetime | None
+    created_at: datetime
+    finished_at: datetime | None
+
+
+def _http_url(value: str) -> str:
+    parts = urlsplit(value)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError("The link has to start with http:// or https://")
+    return value
+
+
+class DownloadIn(BaseModel):
+    url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000), AfterValidator(_http_url)]
+    # The file's name on the server; the one the server offers it with, or the link's, when left out
+    name: Annotated[str | None, StringConstraints(strip_whitespace=True, max_length=200)] = None

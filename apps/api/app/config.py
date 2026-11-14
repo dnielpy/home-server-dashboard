@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     upstream_timeout_seconds: float = 8
     # Where Sender keeps the packages until they are downloaded; a folder on the external disk in production
     sender_dir: str = "./data/sender"
+    # Where the Downloader keeps the files it downloads, and how many it downloads at once
+    downloads_dir: str = "./data/downloads"
+    downloads_parallel: int = 2
 
 
 @lru_cache
