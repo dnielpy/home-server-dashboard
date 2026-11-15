@@ -9,5 +9,6 @@ fetchRetries: 8
 fetchRetryFactor: 2
 fetchRetryMintimeout: 20000
 fetchRetryMaxtimeout: 180000
-fetchTimeout: 300000
+# The server's connection can be slow enough that a big tarball (next) takes more than 5 minutes
+fetchTimeout: 1800000
 networkConcurrency: 4
