@@ -10,8 +10,6 @@ const skillRoot = join(workspace, "skills");
 const disabledRoot = join(workspace, ".dashboard-disabled-skills");
 const agentId = "astro";
 const prefix = "agent:astro:dash-";
-// The Pet's requests for new animations get their own sessions, out of the dashboard's chat list
-const petPrefix = "agent:astro:pet-";
 const bridgeToken = process.env.ASTRO_API_TOKEN;
 if (!bridgeToken) throw new Error("ASTRO_API_TOKEN is required");
 const port = Number(process.env.ASTRO_API_PORT || 3024);
@@ -279,14 +277,6 @@ const server = createServer(async (req,res) => {
         req.on("close",() => {off();onDisconnect();clearInterval(heartbeat);gateway.rpc("sessions.messages.unsubscribe",{key,agentId,subscriptionId}).catch(()=>{});});
         return;
       }
-    }
-    if (req.method === "POST" && url.pathname === "/pet/runs") {
-      const input = await body(req);
-      if (typeof input.message !== "string" || !input.message.trim() || input.message.length > 100000) invalid("Message required (max 100000 characters)");
-      const id = randomUUID(); const key = petPrefix + id;
-      await gateway.rpc("sessions.create", {key,agentId,displayName:"Pet · nueva animación"});
-      const result = await gateway.rpc("chat.send", {sessionKey:key,agentId,message:input.message.trim(),idempotencyKey:id},30000);
-      return json(res,202,{id,status:result.status,runId:result.runId || id});
     }
     if (req.method === "GET" && url.pathname === "/skills") return json(res,200,{items:await skillInventory()});
     if (req.method === "POST" && url.pathname === "/skills") {

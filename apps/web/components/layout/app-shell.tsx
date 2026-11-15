@@ -1,6 +1,5 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { type ReactNode, useState } from "react";
 
 import { AppBar } from "@/components/layout/app-bar";
@@ -8,10 +7,6 @@ import { Sidebar } from "@/components/layout/sidebar";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // Astro's Pet is shown full screen on the server's display, without the dashboard around it
-  const bare = usePathname() === "/pet";
-
-  if (bare) return children;
 
   return (
     <div className="flex h-dvh flex-col">
