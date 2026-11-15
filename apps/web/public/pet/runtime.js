@@ -426,21 +426,19 @@
         width: W,
         height: H,
         /** eyes("heart") or eyes("star", "happy") for the left and right eye. */
+        // An unknown shape or expression falls back to the default one: a typo should not spoil a whole animation
         eyes(left, right = left) {
-          for (const shape of [left, right]) if (!EYES[shape]) throw new Error(`Unknown eye "${shape}"`);
-          state.eyes = [left, right];
+          state.eyes = [EYES[left] ? left : "star", EYES[right] ? right : "star"];
           state.text = null;
           state.hideFace = false;
         },
         mouth(shape) {
-          if (!MOUTHS[shape]) throw new Error(`Unknown mouth "${shape}"`);
-          state.mouth = shape;
+          state.mouth = MOUTHS[shape] ? shape : "smile";
           state.text = null;
           state.hideFace = false;
         },
         set(name) {
-          const preset = EXPRESSIONS[name];
-          if (!preset) throw new Error(`Unknown expression "${name}"`);
+          const preset = EXPRESSIONS[name] || EXPRESSIONS.neutral;
           this.eyes(preset[0], preset[1]);
           this.mouth(preset[2]);
         },
@@ -538,10 +536,12 @@
     face.api.reset();
     face.api.blink();
     const neutral = { transform: "none", translate: "0 0", rotate: "0deg", scale: "1", opacity: 1 };
-    await Promise.all(parts.map((element, i) => {
+    const back = Promise.all(parts.map((element, i) => {
       const to = element === astro.sign ? { ...neutral, opacity: 0 } : neutral;
       return element.animate([from[i], to], { duration: 450, easing: "ease-in-out" }).finished.catch(() => {});
     }));
+    // A browser that is not painting (a hidden tab) never finishes an animation, so it is not waited for long
+    await Promise.race([back, new Promise((done) => setTimeout(done, 700))]);
     // Rebuilt so whatever an animation changed by hand (colors, attributes) is gone too
     build();
   }

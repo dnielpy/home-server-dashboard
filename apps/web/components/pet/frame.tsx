@@ -6,7 +6,8 @@ export type PetScene =
   | { type: "play"; code: string; duration?: number }
   | { type: "message"; text: string; duration?: number };
 
-export type PetResult = { ok: true } | { ok: false; message: string };
+/** timedOut: the player never answered, which a hidden tab causes too since it stops painting. */
+export type PetResult = { ok: true } | { ok: false; message: string; timedOut?: boolean };
 
 type Pending = { resolve: (result: PetResult) => void; timer: ReturnType<typeof setTimeout> };
 
@@ -54,7 +55,7 @@ export function usePetFrame({ kiosk = false }: { kiosk?: boolean } = {}) {
         pending.current.delete(id);
         setReady(false);
         setGeneration((value) => value + 1);
-        resolve({ ok: false, message: "The animation froze the player" });
+        resolve({ ok: false, message: "The animation froze the player", timedOut: true });
       }, limit);
       pending.current.set(id, { resolve, timer });
       target.postMessage({ ...scene, id }, "*");

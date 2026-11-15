@@ -48,6 +48,8 @@ export function PetShow() {
 
     async function run() {
       while (!stopped) {
+        // A hidden tab stops painting, so the animations would stall there; it waits to be seen again
+        while (document.hidden && !stopped) await sleep(1000);
         turn++;
         if (queue.length === 0) {
           await refresh();
@@ -69,7 +71,10 @@ export function PetShow() {
         lastId = animation.id;
         const result = await play({ type: "play", code: animation.code, duration: ANIMATION_MS });
         if (!result.ok) {
-          petApi(`/animations/${animation.id}/failures`, { method: "POST" }).catch(() => undefined);
+          // Only a player that stalled while on screen means the animation froze it; hidden, it is the browser
+          if (!result.timedOut || !document.hidden) {
+            petApi(`/animations/${animation.id}/failures`, { method: "POST" }).catch(() => undefined);
+          }
           // The player shows Astro idle for a moment instead of jumping straight to the next one
           await sleep(1500);
         }
