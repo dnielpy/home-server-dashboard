@@ -1,7 +1,8 @@
 # API
 
 FastAPI service that reads the APIs of the other apps on the home server (Bluetti, Home Net, LocalTube) and
-serves what each card of the dashboard needs. It keeps no state of its own.
+serves what each card of the dashboard needs. Its only state of its own is the Pet's SQLite database
+(`PET_DB_PATH`): Astro's animations and messages for `/pet`.
 
 ```sh
 cp .env.example .env

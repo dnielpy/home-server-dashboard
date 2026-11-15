@@ -364,3 +364,62 @@ class DownloadIn(BaseModel):
     url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000), AfterValidator(_http_url)]
     # The file's name on the server; the one the server offers it with, or the link's, when left out
     name: Annotated[str | None, StringConstraints(strip_whitespace=True, max_length=200)] = None
+
+
+PetTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
+# The code of an animation: the body of an async JavaScript function (see app/pet_guide.md)
+PetCode = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20_000)]
+PetText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=140)]
+
+
+class PetAnimationOut(BaseModel):
+    id: int
+    title: str
+    code: str
+    source: Literal["seed", "ai", "manual"]
+    enabled: bool
+    # Times in a row it threw on the page; at 3 it is turned off
+    failures: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class PetAnimationIn(BaseModel):
+    title: PetTitle
+    code: PetCode
+    # "ai" when Astro saves it, so the request it answered is marked as done
+    source: Literal["ai", "manual"] = "manual"
+
+
+class PetAnimationPatch(BaseModel):
+    title: PetTitle | None = None
+    code: PetCode | None = None
+    enabled: bool | None = None
+
+
+class PetMessageOut(BaseModel):
+    id: int
+    text: str
+    # "ai" for the ones Astro wrote on its own
+    source: Literal["ai", "manual"]
+    enabled: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class PetMessageIn(BaseModel):
+    text: PetText
+    source: Literal["ai", "manual"] = "manual"
+
+
+class PetMessagePatch(BaseModel):
+    text: PetText | None = None
+    enabled: bool | None = None
+
+
+class PetGenerationOut(BaseModel):
+    id: int
+    started_at: datetime
+    # sent: Astro got the request; saved: it saved an animation (detail is its title); failed: the request failed
+    status: Literal["sent", "saved", "failed"]
+    detail: str | None

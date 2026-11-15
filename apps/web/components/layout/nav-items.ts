@@ -13,7 +13,9 @@ import { GitBranchIcon } from "@/components/icons/git-branch-icon";
 import type { IconProps } from "@/components/icons/icon-props";
 import { RouterIcon } from "@/components/icons/router-icon";
 import { SendIcon } from "@/components/icons/send-icon";
+import { PlayIcon } from "@/components/icons/play-icon";
 import { ServerIcon } from "@/components/icons/server-icon";
+import { SignIcon } from "@/components/icons/sign-icon";
 import { ToolboxIcon } from "@/components/icons/toolbox-icon";
 import { TrafficIcon } from "@/components/icons/traffic-icon";
 import { WrenchIcon } from "@/components/icons/wrench-icon";
@@ -52,6 +54,8 @@ export const NAV_ITEMS: NavEntry[] = [
       { href: "/astro/chat", label: "Chat", Icon: SendIcon },
       { href: "/astro/skills", label: "Skills", Icon: ToolboxIcon },
       { href: "/astro/memory", label: "Memoria", Icon: AstroIcon },
+      { href: "/astro/pet/animations", label: "Pet · Animaciones", Icon: PlayIcon },
+      { href: "/astro/pet/messages", label: "Pet · Mensajes", Icon: SignIcon },
     ],
   },
   {

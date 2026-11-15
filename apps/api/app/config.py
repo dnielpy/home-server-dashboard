@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # Where the Downloader keeps the files it downloads, and how many it downloads at once
     downloads_dir: str = "./data/downloads"
     downloads_parallel: int = 2
+    # Astro's Pet: its animations and messages, and how often Astro is asked for a new animation (0 never)
+    pet_db_path: str = "./data/pet/pet.sqlite3"
+    pet_generate_minutes: float = 10
+    # How Astro, on the host, reaches this API to save the animation it made
+    pet_save_url: str = "http://localhost:3021"
 
 
 @lru_cache

@@ -25,11 +25,18 @@ services:
       SENDER_DIR: /data/sender
       DOWNLOADS_DIR: /data/downloads
       DOWNLOADS_PARALLEL: ${DOWNLOADS_PARALLEL:-2}
+      # Astro's Pet: its animations and messages, and how often Astro is asked for a new animation (0 never)
+      PET_DB_PATH: /data/pet/pet.sqlite3
+      PET_GENERATE_MINUTES: ${PET_GENERATE_MINUTES:-10}
+      # Astro runs on the host and saves its animations through the port this API publishes
+      PET_SAVE_URL: http://localhost:${API_PORT:-3021}
     volumes:
       # Sender's packages, on the external disk; the folder has to be writable by the container's user (uid 10001)
       - ${SENDER_HOST_DIR:?Set SENDER_HOST_DIR to a folder on the external disk for Sender}:/data/sender
       # The Downloader's files, on the external disk too, with the same owner
       - ${DOWNLOADS_HOST_DIR:?Set DOWNLOADS_HOST_DIR to a folder on the external disk for the Downloader}:/data/downloads
+      # The Pet's SQLite database: small, so a volume of its own instead of a folder to set up
+      - pet:/data/pet
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -56,3 +63,6 @@ services:
     ports:
       - "${WEB_PORT:-3020}:3000"
     logging: *logging
+
+volumes:
+  pet:

@@ -31,3 +31,5 @@ compose ps
 
 # The agent runs from this repo, so it picks up the new code too. A running update survives the restart.
 systemctl --user try-restart home-server-agent 2>/dev/null || true
+# Astro's bridge runs from this repo too
+systemctl --user try-restart home-server-astro 2>/dev/null || true

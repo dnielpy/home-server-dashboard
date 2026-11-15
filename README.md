@@ -34,14 +34,23 @@ The sidebar also has a module per app, with the pages that app's own web app had
 **Astro** has Chat, Skills and Memoria pages. Its host bridge connects to the local OpenClaw Gateway with a private
 token. Dashboard chats have their own context, separate from Telegram, and share Astro's skills and memory.
 
+**Astro's Pet** is `/pet`: Astro full screen, without the dashboard around it, for the server's own display. It plays
+10 second animations in a shuffled order, and one of every five scenes is Astro holding up a sign with one of your
+messages. Every 10 minutes the API asks Astro for a new animation (`apps/api/app/pet_guide.md` teaches it the format)
+and Astro saves it with `POST /pet/animations`, and now and then a message of its own with `POST /pet/messages`, so
+the library keeps growing on its own. The animations and messages
+are managed from Astro › Pet · Animaciones and Pet · Mensajes, and kept in this API's SQLite database (`PET_DB_PATH`, in the `pet` Docker volume).
+An animation is JavaScript written by Astro: it runs in a sandboxed iframe (`apps/web/public/pet/`) that cannot reach
+the dashboard or the network, and one that throws three times is turned off.
+
 ## Structure
 
 ```
 apps/
-  api/     FastAPI backend: calls the APIs of the other apps and serves what each card needs (no database)
+  api/     FastAPI backend: calls the APIs of the other apps and serves what each card needs (SQLite only for the Pet)
   web/     Next.js frontend
   agent/   Runs on the server itself, outside Docker: git and docker for the Settings pages (standard library only)
-  astro/   Runs on the host: narrow OpenClaw Gateway bridge for Chat, Skills and Memoria
+  astro/   Runs on the host: narrow OpenClaw Gateway bridge for Chat, Skills, Memoria and the Pet's requests
 turbo.json   Task runner config (Turborepo)
 ```
 
@@ -132,6 +141,10 @@ uses the same token. Rebuild the API and web containers so they receive the new 
 
 The browser never receives the OpenClaw Gateway token. Keep the dashboard and its API on a trusted local network or
 VPN. The bridge reads and changes only dashboard chats and Astro's skills and curated memory.
+For the Pet it also opens a session of its own per request (`agent:astro:pet-*`, kept out of the Chat list); Astro
+saves the animation through the API's published port (`PET_SAVE_URL`). `scripts/update.sh` restarts the bridge too.
+
+To show the Pet on the server's display, open `http://localhost:3020/pet` in a full screen (kiosk) browser there.
 Memory saves use Gateway compare-and-set plus OpenClaw's memory provenance store, then verify both the saved bytes and
 trusted provenance. The provenance function is an internal OpenClaw interface; after upgrading OpenClaw, reinstall the
 bridge and verify memory editing. If the interface is unavailable, the bridge refuses edits instead of overwriting a
