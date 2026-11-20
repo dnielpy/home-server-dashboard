@@ -178,15 +178,15 @@ def _read_service_status(path: str) -> dict[str, Any]:
     ids = run(["docker", "ps", "-aq", "--filter", f"label={COMPOSE_LABEL}={path}"], timeout=10)
     if ids.returncode != 0:
         detail = (ids.stderr.strip().splitlines() or ["docker ps failed"])[0]
-        return {"deployed": None, "up": False, "since": None, "detail": detail, "containers": []}
+        return {"deployed": None, "up": False, "since": None, "detail": detail, "containers": [], "ports": []}
     if not ids.stdout.split():
-        return {"deployed": False, "up": False, "since": None, "detail": None, "containers": []}
+        return {"deployed": False, "up": False, "since": None, "detail": None, "containers": [], "ports": []}
 
     inspect = run(["docker", "inspect", *ids.stdout.split()], timeout=10)
     try:
         items = json.loads(inspect.stdout)
     except ValueError:
-        return {"deployed": True, "up": False, "since": None, "detail": "docker inspect failed", "containers": []}
+        return {"deployed": True, "up": False, "since": None, "detail": "docker inspect failed", "containers": [], "ports": []}
 
     containers = []
     for item in items:
@@ -200,8 +200,22 @@ def _read_service_status(path: str) -> dict[str, Any]:
             "exit_code": state.get("ExitCode"),
             "started_at": _docker_time(state.get("StartedAt")),
             "finished_at": _docker_time(state.get("FinishedAt")),
+            "ports": host_ports(item),
         })
     return summarize_containers(containers)
+
+
+def host_ports(item: dict[str, Any]) -> list[int]:
+    """The TCP ports of the host the container publishes, from `docker inspect`. Empty while it is stopped."""
+    bindings = (item.get("NetworkSettings") or {}).get("Ports") or {}
+    ports = {
+        int(binding["HostPort"])
+        for spec, targets in bindings.items()
+        if spec.endswith("/tcp")
+        for binding in targets or []
+        if binding.get("HostPort", "").isdigit()
+    }
+    return sorted(ports)
 
 
 def summarize_containers(containers: list[dict[str, Any]]) -> dict[str, Any]:
@@ -224,6 +238,11 @@ def summarize_containers(containers: list[dict[str, Any]]) -> dict[str, Any]:
         "since": since,
         "detail": ", ".join(problems) or None,
         "containers": containers,
+        # Where to open each service, by its compose name
+        "ports": sorted(
+            ({"service": c["name"], "port": port} for c in containers for port in c.get("ports", [])),
+            key=lambda item: item["port"],
+        ),
     }
 
 

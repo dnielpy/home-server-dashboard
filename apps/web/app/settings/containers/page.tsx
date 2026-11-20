@@ -6,12 +6,12 @@ import { ServersPanel } from "@/components/settings/servers-panel";
 import { Reveal } from "@/components/ui/reveal";
 
 export const metadata: Metadata = {
-  title: "General · Settings · Home Server",
+  title: "Containers · Settings · Home Server",
 };
 
-export default function GeneralSettings() {
+export default function ContainersSettings() {
   return (
-    <Page section="Settings" title="General" Icon={ServerIcon}>
+    <Page section="Settings" title="Containers" Icon={ServerIcon}>
       <Reveal index={1}>
         <ServersPanel />
       </Reveal>

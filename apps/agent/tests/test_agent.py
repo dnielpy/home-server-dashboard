@@ -185,6 +185,25 @@ def test_unhealthy_container_is_down() -> None:
     assert status["detail"] == "api unhealthy"
 
 
+def test_host_ports_are_the_published_tcp_ports() -> None:
+    item = {
+        "NetworkSettings": {
+            "Ports": {
+                "3000/tcp": [{"HostIp": "0.0.0.0", "HostPort": "3006"}, {"HostIp": "::", "HostPort": "3006"}],
+                "443/udp": [{"HostIp": "0.0.0.0", "HostPort": "443"}],
+                "6800/tcp": None,
+            }
+        }
+    }
+    assert agent.host_ports(item) == [3006]
+    assert agent.host_ports({"NetworkSettings": {"Ports": {}}}) == []
+
+
+def test_ports_list_each_service() -> None:
+    status = agent.summarize_containers([{**container(), "name": "web", "ports": [3020]}, {**container(), "ports": [3021]}])
+    assert status["ports"] == [{"service": "web", "port": 3020}, {"service": "api", "port": 3021}]
+
+
 def test_docker_time() -> None:
     assert agent._docker_time("2026-11-13T10:00:00.123456789Z") == "2026-11-13T10:00:00Z"
     assert agent._docker_time("0001-01-01T00:00:00Z") is None

@@ -271,6 +271,8 @@ export type ServiceStatus = {
   up: boolean;
   since: string | null;
   detail: string | null;
+  /** The host ports its containers publish, to open them in the browser. */
+  ports: { service: string; port: number }[];
 };
 
 export type FetchState = "pending" | "ok" | "err" | "noup";

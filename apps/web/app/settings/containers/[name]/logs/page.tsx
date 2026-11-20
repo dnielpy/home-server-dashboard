@@ -14,13 +14,13 @@ export const metadata: Metadata = {
   title: "Logs · Settings · Home Server",
 };
 
-export default async function LogsPage({ params }: PageProps<"/settings/general/[name]/logs">) {
+export default async function LogsPage({ params }: PageProps<"/settings/containers/[name]/logs">) {
   const folder = decodeURIComponent((await params).name);
 
   return (
     <Page section="Settings" title={`${projectMeta(folder).name} logs`} Icon={ServerIcon}>
-      <Link href="/settings/general" className="self-start text-sm text-muted transition-colors hover:text-foreground">
-        ← General
+      <Link href="/settings/containers" className="self-start text-sm text-muted transition-colors hover:text-foreground">
+        ← Containers
       </Link>
       <Reveal index={1}>
         <LogsView project={folder} />

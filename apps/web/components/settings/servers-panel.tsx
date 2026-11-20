@@ -150,6 +150,29 @@ function ServerCard({
         {project.service.detail && <p className="truncate text-sm text-muted">{project.service.detail}</p>}
       </div>
 
+      {project.service.ports.length > 0 && (
+        <ul className="flex flex-wrap gap-2">
+          {project.service.ports.map(({ service, port }) => {
+            const url = `http://${window.location.hostname}:${port}`;
+            return (
+              <li key={port} className="min-w-0">
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={`${service} · ${url}`}
+                  className="glass inline-flex max-w-full items-center gap-1.5 rounded-xl px-3 py-1.5 font-mono text-xs text-foreground transition hover:bg-surface-hover"
+                >
+                  <span className="text-muted">{service}</span>
+                  <span className="truncate">{url.replace("http://", "")}</span>
+                  <span aria-hidden>↗</span>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
       {(error || failed) && (
         <Callout tone="red">{error ?? `Could not ${failed?.name} it: ${failed?.error ?? "docker failed"}`}</Callout>
       )}
@@ -173,7 +196,7 @@ function ServerCard({
           </ActionButton>
         )}
         <Link
-          href={`/settings/general/${encodeURIComponent(project.name)}/logs`}
+          href={`/settings/containers/${encodeURIComponent(project.name)}/logs`}
           aria-disabled={!deployed}
           className={`${BUTTON} ${BUTTON_TONES.neutral} ml-auto ${deployed ? "" : "pointer-events-none opacity-40"}`}
         >

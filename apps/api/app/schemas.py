@@ -196,6 +196,12 @@ class AgentInfoOut(BaseModel):
     root: str
 
 
+class ServicePortOut(BaseModel):
+    # The compose service that publishes it
+    service: str
+    port: int
+
+
 class ServiceStatusOut(BaseModel):
     # False when the project never had containers, None when Docker could not be asked
     deployed: bool | None
@@ -203,6 +209,8 @@ class ServiceStatusOut(BaseModel):
     # When the last container came up, or the last one stopped
     since: datetime | None
     detail: str | None
+    # The host ports its containers publish, to open them in the browser
+    ports: list[ServicePortOut] = []
 
 
 ContainerAction = Literal["stop", "start", "restart"]

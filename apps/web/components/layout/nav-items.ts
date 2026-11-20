@@ -79,7 +79,7 @@ export const NAV_ITEMS: NavEntry[] = [
     Icon: WrenchIcon,
     children: [
       { href: "/settings/server", label: "Server", Icon: GaugeIcon },
-      { href: "/settings/general", label: "General", Icon: ServerIcon, matchPrefix: true },
+      { href: "/settings/containers", label: "Containers", Icon: ServerIcon, matchPrefix: true },
       { href: "/settings/cicd", label: "CI/CD", Icon: GitBranchIcon },
     ],
   },
