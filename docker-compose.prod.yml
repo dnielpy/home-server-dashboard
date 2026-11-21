@@ -30,6 +30,7 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_OWNER_USER_ID: ${TELEGRAM_OWNER_USER_ID:-}
       TELEGRAM_STATE_DIR: /data/telegram
+      TELEGRAM_ALERTS: ${TELEGRAM_ALERTS:-true}
     volumes:
       # Sender's packages, on the external disk; the folder has to be writable by the container's user (uid 10001)
       - ${SENDER_HOST_DIR:?Set SENDER_HOST_DIR to a folder on the external disk for Sender}:/data/sender

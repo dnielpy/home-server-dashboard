@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     # One-time bootstrap when the persisted state has no user registry yet.
     telegram_owner_user_id: int | None = Field(default=None, gt=0)
     telegram_state_dir: str = "./data/telegram"
+    # Messages the bot sends on its own: grid power, internet outages and finished downloads
+    telegram_alerts: bool = True
 
     @field_validator("telegram_bot_token", "telegram_owner_user_id", mode="before")
     @classmethod

@@ -91,7 +91,8 @@ class TelegramServer:
 def make_bot(root, server, routes=None, **settings):
     sources, calls = upstreams(readings() if routes is None else routes)
     config = Settings(_env_file=None, **{
-        "telegram_state_dir": str(root), "telegram_bot_token": TOKEN, "telegram_owner_user_id": OWNER, **settings,
+        "telegram_state_dir": str(root), "telegram_bot_token": TOKEN, "telegram_owner_user_id": OWNER,
+        "telegram_alerts": False, **settings,
     })
     bot = TelegramBot(config, sources, transport=httpx.MockTransport(server.handle))
     return bot, calls

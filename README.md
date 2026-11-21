@@ -169,6 +169,22 @@ Any other text from a registered user is checked for an `http(s)` link. The bot 
 its web app's `/api/downloads`). The question expires after 15 minutes or an API restart, a pressed button never queues
 the link twice, and a refused link keeps the buttons to try again. Links follow the `/downloads` switch.
 
+#### Alerts
+
+Every 30 seconds the bot also checks, on its own, and messages every registered user when:
+
+| Alert | When |
+| --- | --- |
+| 🚨 Se fue la luz | A fresh Bluetti reading shows no AC input for at least a minute, with the battery and runtime |
+| ✅ Vino la luz | AC input is back for at least a minute, with how long the outage lasted |
+| 🌐 Volvió internet | Home Net (`/connection-status`) closes an outage of a minute or more: when it went, when it came back, how long and which hop failed. It can only be sent once internet is back |
+| ✅ Descarga terminada | A video downloader download becomes complete (several at once go in one message) |
+
+Changes shorter than a minute (the Bluetti's AC input flickers for a few seconds now and then) are not told. What the
+bot last saw is kept in `state.json`, so a restart neither repeats an alert nor misses a change made meanwhile, and the
+first look at each source after enabling only records it. Alerts that Telegram cannot take yet wait in an outbox
+in the same file and go out on a later check. Set `TELEGRAM_ALERTS=false` to turn them off.
+
 Under **Telegram → Usuarios**, press **Agregar usuario** while the bot is connected. From the account to add, send
 `/add` to the bot in a private chat. The window closes automatically after **five minutes**, or immediately after the
 first eligible `/add`, whichever comes first. Repeated clicks do not extend it, old queued messages cannot claim it,

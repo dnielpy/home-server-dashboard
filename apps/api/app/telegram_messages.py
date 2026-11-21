@@ -28,6 +28,7 @@ MAX_WAITING = 3
 MAX_NAME = 48
 T = TypeVar("T", bound=BaseModel)
 
+DESTINATION_NAMES = {"downloads": "Descargas", "gallery": "Galería"}
 COMMAND_ICONS = {"stats": "🏠", "battery": "🔋", "internet": "🌐", "server": "🖥️", "downloads": "📥", "help": "❓"}
 
 

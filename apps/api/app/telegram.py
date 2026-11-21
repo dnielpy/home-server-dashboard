@@ -19,7 +19,9 @@ from pydantic import BaseModel, Field, ValidationError
 from app.clients import videodownloader
 from app.clients.upstream import UpstreamError, Upstreams
 from app.config import Settings
+from app.telegram_alerts import AlertState, AlertWatcher
 from app.telegram_messages import (
+    DESTINATION_NAMES,
     battery_message,
     downloads_message,
     help_message,
@@ -47,7 +49,6 @@ MAX_PENDING_LINKS = 50
 UNAVAILABLE = "🚫 Comando no disponible."
 NOT_A_LINK = "🤔 No veo un enlace ahí.\nMándame un link que empiece por <code>http://</code> o <code>https://</code>, o usa /help."
 EXPIRED = "⌛ Este enlace ya caducó. Mándamelo otra vez."
-DESTINATIONS = {"downloads": "Descargas", "gallery": "Galería"}
 
 
 class TelegramState(BaseModel):
@@ -58,6 +59,7 @@ class TelegramState(BaseModel):
     commands: dict[str, bool] = Field(default_factory=lambda: {"stats": True})
     # None identifies the old state format; an empty list deliberately allows nobody.
     users: list[TelegramUser] | None = None
+    alerts: AlertState = Field(default_factory=AlertState)
 
 
 class StateError(Exception):
@@ -159,6 +161,7 @@ class TelegramBot:
         self.error: str | None = None
         self._http: httpx.AsyncClient | None = None
         self._task: asyncio.Task | None = None
+        self._alerts: asyncio.Task | None = None
         self._wake = asyncio.Event()
         self._synced_menu: tuple[str, ...] | None = None
         self.enrollment = EnrollmentWindow()
@@ -256,9 +259,15 @@ class TelegramBot:
         self._started_clock = time.monotonic()
         self.state = "connecting"
         self._task = asyncio.create_task(self._run(), name="telegram-bot")
+        if self.settings.telegram_alerts:
+            self._alerts = asyncio.create_task(AlertWatcher(self).run(), name="telegram-alerts")
 
     async def aclose(self) -> None:
         await self.enrollment.aclose()
+        if self._alerts:
+            self._alerts.cancel()
+            await asyncio.gather(self._alerts, return_exceptions=True)
+            self._alerts = None
         if self._task:
             self._task.cancel()
             await asyncio.gather(self._task, return_exceptions=True)
@@ -425,7 +434,7 @@ class TelegramBot:
         except (ValidationError, KeyError, TypeError):
             return "⚠️ <b>No pude agregarlo</b>\nEl gestor de descargas respondió algo inesperado.", True
         link.result = (
-            f"✅ <b>Agregado a {DESTINATIONS[choice]}</b>\n📄 {escape(short(download.fileName))}\n\n"
+            f"✅ <b>Agregado a {DESTINATION_NAMES[choice]}</b>\n📄 {escape(short(download.fileName))}\n\n"
             "Míralo con /downloads"
         )
         return link.result, False
