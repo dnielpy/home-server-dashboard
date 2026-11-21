@@ -396,3 +396,23 @@ export type ServerDownload = {
   created_at: string;
   finished_at: string | null;
 };
+
+// Files: the external disk, as the agent on the server lists it. Paths are relative to the disk, "" for its top.
+
+export type FileEntry = {
+  name: string;
+  kind: "folder" | "file";
+  /** Null for a folder. */
+  size: number | null;
+  /** Unix seconds. */
+  modified: number;
+  link: boolean;
+  /** A top-level folder an app writes to, which cannot be renamed or deleted. */
+  protected: boolean;
+};
+
+export type Folder = {
+  path: string;
+  entries: FileEntry[];
+  disk: { total: number; free: number };
+};

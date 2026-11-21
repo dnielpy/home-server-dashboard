@@ -24,16 +24,21 @@ class Upstream:
     source: str
     http: httpx.AsyncClient
 
-    async def get(self, path: str, **params: Any) -> Any:
+    # Positional-only, so a query parameter can be called path too
+    async def get(self, path: str, /, **params: Any) -> Any:
         return await self._request("GET", path, params)
 
-    async def post(self, path: str) -> Any:
-        return await self._request("POST", path, {})
+    async def post(self, path: str, /, timeout: float | None = None, **params: Any) -> Any:
+        return await self._request("POST", path, params, timeout)
 
-    async def _request(self, method: str, path: str, params: dict[str, Any]) -> Any:
+    async def _request(self, method: str, path: str, params: dict[str, Any], timeout: float | None = None) -> Any:
         try:
             response = await self.http.request(
-                method, path, params={k: v for k, v in params.items() if v is not None}
+                method,
+                path,
+                params={k: v for k, v in params.items() if v is not None},
+                # Unless the call says otherwise, the client's own
+                **({"timeout": timeout} if timeout is not None else {}),
             )
         except httpx.HTTPError as err:
             raise UpstreamError(self.source, f"Could not reach {self.source}: {err!r}") from err

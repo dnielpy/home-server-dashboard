@@ -13,7 +13,8 @@ Routes = dict[str, Any]
 
 
 def _client(source: str, routes: Routes, calls: list[httpx.Request]) -> Upstream:
-    """An upstream that answers each path from `routes`: a JSON body, an (status, body) tuple, or an exception."""
+    """An upstream that answers each path from `routes`: a JSON body, an (status, body) tuple, a whole response or an
+    exception."""
 
     def handle(request: httpx.Request) -> httpx.Response:
         calls.append(request)
@@ -22,6 +23,8 @@ def _client(source: str, routes: Routes, calls: list[httpx.Request]) -> Upstream
             return httpx.Response(404, json={"detail": "Not Found"})
         if isinstance(answer, Exception):
             raise answer
+        if isinstance(answer, httpx.Response):
+            return answer
         if isinstance(answer, tuple):
             # Serialized by hand so a None body is sent as `null`, as the apps do, instead of no body
             return httpx.Response(

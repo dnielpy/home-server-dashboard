@@ -8,6 +8,7 @@ import { ChartIcon } from "@/components/icons/chart-icon";
 import { DashboardIcon } from "@/components/icons/dashboard-icon";
 import { DevicesIcon } from "@/components/icons/devices-icon";
 import { DownloadIcon } from "@/components/icons/download-icon";
+import { FolderIcon } from "@/components/icons/folder-icon";
 import { GaugeIcon } from "@/components/icons/gauge-icon";
 import { GitBranchIcon } from "@/components/icons/git-branch-icon";
 import type { IconProps } from "@/components/icons/icon-props";
@@ -74,6 +75,7 @@ export const NAV_ITEMS: NavEntry[] = [
       { href: "/network/devices", label: "Devices", Icon: DevicesIcon, matchPrefix: true },
     ],
   },
+  { href: "/files", label: "Files", Icon: FolderIcon },
   {
     label: "Settings",
     Icon: WrenchIcon,

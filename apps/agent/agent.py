@@ -3,7 +3,8 @@
 
 Does what home-server.sh does: lists the folders with a git repo next to the dashboard's, compares them with GitHub
 and updates and redeploys them with their own scripts/update.sh. It also tells whether each one's containers are
-running and since when, stops, starts and restarts them and reads their logs, reboots or powers off the server, and the server's CPU, memory, disks and network (metrics.py). Only uses the standard library,
+running and since when, stops, starts and restarts them and reads their logs, reboots or powers off the server, and the server's CPU, memory, disks and network (metrics.py). It also manages the files of the external disk
+(files.py). Only uses the standard library,
 so it runs with the python3 of the host.
 
 Usage: python3 agent.py   (ROOT, AGENT_PORT, STATE_DIR, SYSTEM_DISK_MOUNT and EXTERNAL_DISK_MOUNT can be set in the
@@ -28,6 +29,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+import files
 import metrics
 
 # The folder the projects live in: the one this repo was cloned into (apps/agent/agent.py -> ../../..)
@@ -748,6 +750,47 @@ def _power(query, action):
     return {"status": "started"}
 
 
+def external_disk() -> files.Disk:
+    return files.Disk(metrics.EXTERNAL_DISK_MOUNT or metrics.media_disk_mount(ROOT))
+
+
+def on_disk(action):
+    """Runs a files.Disk action and answers its errors as the agent's."""
+    try:
+        return action(external_disk())
+    except files.FilesError as err:
+        raise HttpError(err.status, err.detail) from err
+
+
+def param(query, name: str) -> str:
+    return query.get(name, [""])[0]
+
+
+@route("GET", "/files")
+def _files(query):
+    return on_disk(lambda disk: disk.listing(param(query, "path")))
+
+
+@route("GET", "/files/download")
+def _files_download(query):
+    return on_disk(lambda disk: disk.download(param(query, "path")))
+
+
+@route("POST", "/files/rename")
+def _files_rename(query):
+    return on_disk(lambda disk: disk.rename(param(query, "path"), param(query, "name")))
+
+
+@route("POST", "/files/delete")
+def _files_delete(query):
+    return on_disk(lambda disk: disk.delete(param(query, "path")))
+
+
+@route("POST", "/files/mkdir")
+def _files_mkdir(query):
+    return on_disk(lambda disk: disk.mkdir(param(query, "path"), param(query, "name")))
+
+
 @route("GET", "/projects/(?P<name>[^/]+)/logs")
 def _logs(query, name):
     tail = query.get("tail", [""])[0]
@@ -771,12 +814,28 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception as err:  # noqa: BLE001 - the dashboard shows it instead of a dropped connection
                     status, body = 500, {"detail": f"{type(err).__name__}: {err}"}
                 break
+        if isinstance(body, files.Download):
+            self._stream(body)
+            return
         data = json.dumps(body).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _stream(self, download: files.Download) -> None:
+        self.send_response(200)
+        for name, value in download.headers().items():
+            self.send_header(name, value)
+        # A zip has no length up front: the end of the connection ends it
+        self.send_header("Connection", "close")
+        self.end_headers()
+        try:
+            download.write(self.wfile)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # The download was cancelled
+        self.close_connection = True
 
     def do_GET(self) -> None:  # noqa: N802
         self._handle("GET")

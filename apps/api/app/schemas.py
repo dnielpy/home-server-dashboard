@@ -372,3 +372,34 @@ class DownloadIn(BaseModel):
     url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000), AfterValidator(_http_url)]
     # The file's name on the server; the one the server offers it with, or the link's, when left out
     name: Annotated[str | None, StringConstraints(strip_whitespace=True, max_length=200)] = None
+
+
+class FileEntryOut(BaseModel):
+    name: str
+    kind: Literal["folder", "file"]
+    # None for a folder
+    size: int | None
+    # Unix seconds
+    modified: float
+    # A symbolic link, to a file or folder on the disk
+    link: bool
+    # A top-level folder an app writes to, which cannot be renamed or deleted
+    protected: bool
+
+
+class DiskSpaceOut(BaseModel):
+    total: int
+    free: int
+
+
+class FolderOut(BaseModel):
+    # Relative to the disk, "" for its top
+    path: str
+    # Folders first, then files, by name
+    entries: list[FileEntryOut]
+    disk: DiskSpaceOut
+
+
+class FilePathOut(BaseModel):
+    # Where it is now, relative to the disk
+    path: str
