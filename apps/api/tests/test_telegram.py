@@ -9,8 +9,15 @@ from fastapi.testclient import TestClient
 from app.clients.upstream import Upstream, Upstreams
 from app.config import Settings
 from app.main import app
-from app.telegram import StateError, TelegramBot, TelegramStore, get_telegram
-from app.telegram_stats import stats_message
+from app.telegram import EXPIRED, NOT_A_LINK, UNAVAILABLE, StateError, TelegramBot, TelegramStore, get_telegram
+from app.telegram_messages import (
+    battery_message,
+    downloads_message,
+    help_message,
+    internet_message,
+    server_message,
+    stats_message,
+)
 
 NOW = datetime(2026, 11, 20, 18, 30, tzinfo=UTC)
 TOKEN = "123456:dummy-private-token"
@@ -41,12 +48,14 @@ def upstreams(routes):
         body = routes.get(request.url.path)
         if isinstance(body, Exception):
             raise body
+        if callable(body):
+            return body(request)
         return httpx.Response(200, json=body)
 
     def client(name):
         return Upstream(name, httpx.AsyncClient(base_url=f"http://{name}", transport=httpx.MockTransport(handle)))
 
-    return Upstreams(*(client(name) for name in ("bluetti", "homenet", "localtube", "agent"))), calls
+    return Upstreams(*(client(name) for name in ("bluetti", "homenet", "localtube", "agent", "videodownloader"))), calls
 
 
 class TelegramServer:
@@ -103,11 +112,11 @@ def test_stats_power_and_full_details(ac, event):
         try:
             text = await stats_message(sources, NOW)
             assert f"{event}: 19/11/2026 08:00" in text
-            assert ("Corriente: disponible" if ac else "Corriente: apagón") in text
-            assert "76% · descargando" in text
+            assert ("Corriente:</b> ✅ hay luz" if ac else "Corriente:</b> 🚨 apagón") in text
+            assert "76% ▰▰▰▰▰▰▰▰▱▱ · 🔻 descargando" in text
             assert "Consumo: 123.5 W" in text
             assert "Autonomía hasta reserva del 20%: 3 h 30 min" in text
-            assert "Internet: disponible" in text
+            assert "Internet:</b> ✅ conectado" in text
             assert set(calls) == set(readings())
         finally:
             await sources.aclose()
@@ -117,7 +126,7 @@ def test_stats_power_and_full_details(ac, event):
 @pytest.mark.parametrize("status,extra,expected", [
     ("charging", {"hours_to_full": 1.25}, "Hasta carga completa: 1 h 15 min"),
     ("charging", {"soc": 100}, "Carga completa"),
-    ("reserve", {"soc": 18}, "reserva del 20% alcanzada"),
+    ("reserve", {"soc": 18}, "Reserva del 20% alcanzada"),
     ("idle", {"eta": None, "hours_left": None}, "Autonomía / tiempo de carga: no disponible"),
     ("charging", {"eta": None, "hours_left": None}, "Autonomía / tiempo de carga: no disponible"),
 ])
@@ -139,11 +148,11 @@ def test_stats_partial_failures_and_offline_internet():
         sources, _ = upstreams(routes)
         try:
             text = await stats_message(sources, NOW)
-            assert "Corriente: apagón" in text
+            assert "Corriente:</b> 🚨 apagón" in text
             assert "Se fue la luz: hora no disponible" in text
-            assert "76% · estado no disponible" in text
+            assert "76% ▰▰▰▰▰▰▰▰▱▱ · estado no disponible" in text
             assert "Consumo: 120 W" in text
-            assert "Internet: sin conexión" in text
+            assert "Internet:</b> ❌ sin conexión" in text
         finally:
             await sources.aclose()
     asyncio.run(run())
@@ -156,9 +165,9 @@ def test_battery_estimate_still_works_when_summary_endpoint_fails():
         sources, _ = upstreams(routes)
         try:
             text = await stats_message(sources, NOW)
-            assert "76% · descargando" in text
+            assert "🔻 descargando" in text
             assert "Consumo: 123.5 W" in text
-            assert "Corriente: no disponible" in text
+            assert "Corriente:</b> no disponible" in text
         finally:
             await sources.aclose()
     asyncio.run(run())
@@ -185,9 +194,9 @@ def test_stats_empty_and_invalid_sources(routes):
         sources, _ = upstreams(routes)
         try:
             text = await stats_message(sources, NOW)
-            assert "Corriente: no disponible" in text
-            assert "Batería Bluetti: no disponible" in text
-            assert "Internet: no disponible" in text
+            assert "Corriente:</b> no disponible" in text
+            assert "Batería:</b> no disponible" in text
+            assert "Internet:</b> no disponible" in text
         finally:
             await sources.aclose()
     asyncio.run(run())
@@ -207,18 +216,20 @@ def test_worker_authorizes_commands_counts_once_and_syncs_switches(tmp_path):
                 update(6), update(6), update(7, text="/unknown"),
             ])
             await wait_for(lambda: bot.store.state.offset == 8)
-            assert bot.status().total_requests == 2
-            assert len(server.sent) == 2
+            assert bot.status().total_requests == 3
+            assert len(server.sent) == 3
             assert server.sent[0]["chat_id"] == OWNER
-            assert server.sent[1]["text"] == "Comando no disponible."
+            assert server.sent[0]["text"] == NOT_A_LINK  # "hello" is plain text, not a link
+            assert server.sent[2]["text"] == UNAVAILABLE
             assert len(calls) == 4  # Only the authorized, enabled /stats consulted the sources.
             bot.set_command("stats", False)
             await wait_for(lambda: bot.status().menu_synced)
-            assert [body for method, body in server.calls if method == "setMyCommands"][-1]["commands"] == []
+            menu = [body for method, body in server.calls if method == "setMyCommands"][-1]["commands"]
+            assert "stats" not in [command["command"] for command in menu]
             await server.batches.put([update(8, text="/stats@home_stats_bot")])
             await wait_for(lambda: bot.store.state.offset == 9)
-            assert server.sent[-1]["text"] == "Comando no disponible."
-            assert bot.status().total_requests == 3
+            assert server.sent[-1]["text"] == UNAVAILABLE
+            assert bot.status().total_requests == 4
             assert len(calls) == 4
             assert bot.started_at == started
             bot.set_command("stats", True)
@@ -305,7 +316,7 @@ def test_disabling_stats_while_sources_are_loading_blocks_the_reply(tmp_path, mo
             bot.set_command("stats", False)
             release.set()
             await wait_for(lambda: bot.store.state.offset == 2 and bot.status().menu_synced)
-            assert server.sent[0]["text"] == "Comando no disponible."
+            assert server.sent[0]["text"] == UNAVAILABLE
             assert bot.status().total_requests == 1
         finally:
             await bot.aclose()
@@ -326,7 +337,7 @@ def test_new_bot_identity_resets_only_the_cursor(tmp_path):
             assert bot.status().total_requests == 21
             assert bot.store.state.bot_id == server.identity["id"]
             assert not bot.enabled("stats")
-            assert server.sent[0]["text"] == "Comando no disponible."
+            assert server.sent[0]["text"] == UNAVAILABLE
         finally:
             await bot.aclose()
             await bot.upstreams.aclose()
@@ -494,3 +505,271 @@ def test_dashboard_lifespan_without_telegram_credentials(tmp_path, monkeypatch):
         assert client.get("/health").status_code == 200
         assert client.get("/telegram/status").json()["state"] == "unconfigured"
         assert client.get("/telegram/commands").json()[0]["enabled"] is True
+
+
+def video_download(**fields):
+    return {
+        "id": "d1", "url": "https://example.com/movie.mkv", "destination": "downloads", "fileName": "movie.mkv",
+        "totalBytes": 2 * 1024 ** 3, "completedBytes": 512 * 1024 ** 2, "progress": 25.0,
+        "speedBytesPerSecond": 150 * 1024, "etaSeconds": 3 * 3600, "status": "active", **fields,
+    }
+
+
+def video_downloads(*items, **fields):
+    return {
+        "downloads": list(items),
+        "stats": {"downloadSpeedBytesPerSecond": 150 * 1024, "active": 1, "waiting": 1, "stopped": 0},
+        "speedLimit": 0, "queuePaused": False, "engineAvailable": True, **fields,
+    }
+
+
+def run_message(build, routes):
+    async def run():
+        sources, _ = upstreams(routes)
+        try:
+            return await build(sources, NOW)
+        finally:
+            await sources.aclose()
+    return asyncio.run(run())
+
+
+def test_battery_message_shows_charge_power_and_outages():
+    routes = {
+        "/battery-estimate": {
+            "status": "discharging", "soc": 76, "load_w": 18, "reserve_percent": 20,
+            "eta": (NOW + timedelta(hours=3.5)).isoformat(), "hours_left": 3.5,
+        },
+        "/power-status": {"receiving_ac": False, "current_since": (NOW - timedelta(hours=2)).isoformat()},
+        "/power-totals": {"with_power_hours": 20, "without_power_hours": 4, "receiving_ac": False, "outage_ongoing": True},
+        "/power-periods": [
+            {"start": "2026-11-20T00:00:00Z", "end": "2026-11-20T03:00:00Z", "receiving_ac": False},
+            {"start": "2026-11-20T03:00:00Z", "end": "2026-11-20T03:00:10Z", "receiving_ac": True},
+            {"start": "2026-11-20T03:00:10Z", "end": "2026-11-20T03:00:20Z", "receiving_ac": False},
+            {"start": "2026-11-20T03:00:20Z", "end": "2026-11-20T16:30:00Z", "receiving_ac": True},
+            {"start": "2026-11-20T16:30:00Z", "end": "2026-11-20T18:30:00Z", "receiving_ac": False},
+        ],
+    }
+    text = run_message(battery_message, routes)
+    assert "<b>76%</b>  ▰▰▰▰▰▰▰▰▱▱" in text
+    assert "🔻 Descargando" in text
+    assert "Consumo: <b>18 W</b>" in text
+    assert "Llega a la reserva (20%) en <b>3 h 30 min</b> · 18:00" in text
+    assert "🚨 apagón desde 12:30 (hace 2 h 0 min)" in text
+    assert "☀️ 20 h 0 min con luz · 🌑 4 h 0 min sin luz" in text
+    assert "Apagones: 2 · el más largo de 3 h 0 min" in text  # The 10 second flicker is not one
+
+
+def test_battery_message_with_bluetti_down():
+    text = run_message(battery_message, {"/battery-estimate": httpx.ConnectError("down")})
+    assert "No pude leer la batería" in text
+    assert "• Ahora: no disponible" in text
+    assert "Últimas 24 h: no disponible" in text
+
+
+def test_internet_message_shows_connection_speed_and_usage():
+    routes = {
+        "/connection/latest": {
+            "checked_at": NOW.isoformat(), "online": True,
+            "hops": [{"name": "router", "ok": True, "latency_ms": 6}, {"name": "internet", "ok": True, "latency_ms": 102.4}],
+        },
+        "/connection/throughput/current": {"measured_at": NOW.isoformat(), "rx_bytes_per_second": 250_000, "tx_bytes_per_second": 12_500},
+        "/speed-test/latest": {"measured_at": (NOW - timedelta(minutes=6)).isoformat(), "download_mbps": 4.9, "ping_ms": 543},
+        "/bandwidth": {"total_rx_bytes": 5 * 1024 ** 3, "total_tx_bytes": 1024 ** 3, "items": []},
+        "/device-usage": [{"mac": "aa", "name": "<Laptop>", "down_bytes": 3 * 1024 ** 3, "up_bytes": 0}],
+    }
+    text = run_message(internet_message, routes)
+    assert "✅ <b>Conectado</b>" in text
+    assert "Latencia: 102 ms" in text
+    assert "⬇️ 2.0 Mbps · ⬆️ 0.1 Mbps" in text
+    assert "Último test de velocidad</b> · 14:24" in text
+    assert "⬇️ 4.9 Mbps · 📡 ping 543 ms" in text
+    assert "⬇️ 5.0 GB · ⬆️ 1.0 GB" in text
+    assert "<b>&lt;Laptop&gt;</b> (3.0 GB ⬇️)" in text
+
+
+def test_internet_message_offline_and_partial():
+    routes = {"/connection/latest": {"checked_at": NOW.isoformat(), "online": False, "break_at": "provider"}}
+    text = run_message(internet_message, routes)
+    assert "❌ <b>Sin conexión</b>" in text
+    assert "Falla en: provider" in text
+    assert text.count("no disponible") == 3
+
+
+def test_server_message_shows_resources_and_boot():
+    routes = {"/system": {
+        "updated_at": NOW.isoformat(), "cpu_percent": 41.0,
+        "memory": {"total_bytes": 4 * 1024 ** 3, "used_bytes": 2 * 1024 ** 3, "available_bytes": 2 * 1024 ** 3, "percent": 50},
+        "disks": [{"name": "system", "mount": "/", "total_bytes": 30 * 1024 ** 3, "used_bytes": 28 * 1024 ** 3, "available_bytes": 2 * 1024 ** 3, "percent": 93}],
+        "network": {"interface": "wlo1", "rx_bytes_per_second": 2048, "tx_bytes_per_second": 1024, "total_rx_bytes": 1024 ** 3, "total_tx_bytes": 0},
+        "boot": {"booted_at": (NOW - timedelta(days=5, hours=11)).isoformat(), "last_shutdown": {"at": "2026-11-15T07:00:00Z", "clean": False}},
+    }}
+    text = run_message(server_message, routes)
+    assert "🟢 <b>CPU</b>  41%  ▰▰▰▰▱▱▱▱▱▱" in text
+    assert "2.0 GB de 4.0 GB en uso" in text
+    assert "🔴 <b>Disco del sistema</b>  93%" in text
+    assert "2.0 GB libres de 30.0 GB" in text
+    assert "Disco externo</b> no montado" in text
+    assert "Ahora: ⬇️ 2.0 KB/s · ⬆️ 1.0 KB/s" in text
+    assert "Encendido</b> hace 5 d 11 h" in text
+    assert "⚡ corte" in text
+
+
+def test_server_message_with_agent_down():
+    assert "No pude leer el estado del servidor" in run_message(server_message, {"/system": httpx.ConnectError("down")})
+
+
+def test_downloads_message_lists_running_downloads_first():
+    routes = {"/api/downloads": video_downloads(
+        video_download(id="w", status="waiting", fileName="next.zip", progress=None, totalBytes=None, completedBytes=0),
+        video_download(id="c", status="complete", fileName="done.zip"),
+        video_download(fileName="x" * 80),
+        queuePaused=True, speedLimit=500 * 1024,
+    )}
+    text = run_message(downloads_message, routes)
+    assert "Velocidad: <b>150.0 KB/s</b>" in text
+    assert "⬇️ 1 activa · ⏳ 1 en espera · ⏸️ 0 en pausa" in text
+    assert "Límite de velocidad: 500.0 KB/s" in text
+    assert "La cola está en pausa" in text
+    assert "done.zip" not in text
+    assert text.index("x" * 31 + "…" + "x" * 16) < text.index("next.zip")
+    assert "▰▰▱▱▱▱▱▱▱▱ 25.0%" in text
+    assert "512.0 MB / 2.0 GB · 150.0 KB/s · ⏳ 3 h 0 min" in text
+    assert "⏳ <b>En espera (1)</b>\n• next.zip" in text
+
+
+def test_downloads_message_empty_down_and_truncated():
+    assert "No hay descargas en curso" in run_message(downloads_message, {"/api/downloads": video_downloads()})
+    assert "No pude conectar" in run_message(downloads_message, {"/api/downloads": httpx.ConnectError("down")})
+    waiting = [video_download(id=str(i), status="waiting", fileName=f"f{i}") for i in range(5)]
+    paused = [video_download(id=f"p{i}", status="paused", fileName=f"p{i}") for i in range(10)]
+    text = run_message(downloads_message, {"/api/downloads": video_downloads(*waiting, *paused)})
+    assert "⏸️ <b>p7</b>" in text and "<b>p8</b>" not in text
+    assert "…y 2 más" in text
+    assert "En espera (5)" in text and "• f2" in text and "• f3" not in text
+
+
+def test_help_lists_only_enabled_commands():
+    text = help_message([("battery", "Batería <Bluetti>")], links=False)
+    assert "🔋 /battery — Batería &lt;Bluetti&gt;" in text
+    assert "/stats" not in text
+    assert "enlace" not in text
+    assert "Mándame un enlace" in help_message([], links=True)
+
+
+def test_help_command_follows_switches(tmp_path):
+    async def run():
+        server = TelegramServer()
+        bot, _ = make_bot(tmp_path, server)
+        bot.set_command("server", False)
+        await bot.start()
+        try:
+            await server.batches.put([update(1, text="/help"), update(2, text="/start")])
+            await wait_for(lambda: len(server.sent) == 2)
+            assert server.sent[0]["parse_mode"] == "HTML"
+            assert "/battery" in server.sent[0]["text"]
+            assert "/server" not in server.sent[0]["text"]
+            assert server.sent[1]["text"] == server.sent[0]["text"]
+        finally:
+            await bot.aclose()
+            await bot.upstreams.aclose()
+    asyncio.run(run())
+
+
+def callback(number, data, user=OWNER, message_id=7):
+    return {"update_id": number, "callback_query": {
+        "id": f"q{number}", "from": {"id": user}, "data": data,
+        "message": {"message_id": message_id, "chat": {"id": user, "type": "private"}},
+    }}
+
+
+def link_bot(tmp_path, server, answer):
+    posts = []
+
+    def add(request):
+        posts.append((json.loads(request.content), request.headers.get("idempotency-key")))
+        return answer(request)
+
+    return (*make_bot(tmp_path, server, routes={"/api/downloads": add}), posts)
+
+
+def test_link_is_offered_and_queued_once(tmp_path):
+    async def run():
+        server = TelegramServer()
+        created = lambda request: httpx.Response(201, json={"download": video_download(fileName="movie.mkv")})
+        bot, _, posts = link_bot(tmp_path, server, created)
+        await bot.start()
+        try:
+            await server.batches.put([update(1, text="mira esto: https://example.com/movie.mkv.")])
+            await wait_for(lambda: len(server.sent) == 1)
+            offer = server.sent[0]
+            assert "https://example.com/movie.mkv</code>" in offer["text"]
+            buttons = [button for row in offer["reply_markup"]["inline_keyboard"] for button in row]
+            assert [button["text"] for button in buttons] == ["📥 Sí, a Descargas", "🖼️ Sí, a Galería", "❌ No"]
+            data = buttons[0]["callback_data"]
+            assert len(data.encode()) <= 64
+
+            # A press from another user, and the same press twice, queue it only once
+            await server.batches.put([callback(2, data, user=99), callback(3, data), callback(4, data)])
+            await wait_for(lambda: bot.store.state.offset == 5)
+            assert posts == [({"url": "https://example.com/movie.mkv", "destination": "downloads"}, posts[0][1])]
+            assert posts[0][1].startswith("telegram-")
+            edits = [body for method, body in server.calls if method == "editMessageText"]
+            assert len(edits) == 2
+            assert "Agregado a Descargas" in edits[0]["text"] and "movie.mkv" in edits[0]["text"]
+            assert "reply_markup" not in edits[0]
+            assert edits[1]["text"] == edits[0]["text"]
+            assert len([1 for method, _ in server.calls if method == "answerCallbackQuery"]) == 2
+            assert bot.status().total_requests == 3
+        finally:
+            await bot.aclose()
+            await bot.upstreams.aclose()
+    asyncio.run(run())
+
+
+def test_link_declined_expired_and_failed(tmp_path, monkeypatch):
+    async def run():
+        server = TelegramServer()
+        refused = lambda request: httpx.Response(400, json={"error": {"code": "BAD", "message": "Enter a valid URL."}})
+        bot, _, posts = link_bot(tmp_path, server, refused)
+        await bot.start()
+        try:
+            await server.batches.put([update(1, text="https://a.example/x"), update(2, text="https://b.example/y")])
+            await wait_for(lambda: len(server.sent) == 2)
+            first, second = (
+                [b["callback_data"] for row in sent["reply_markup"]["inline_keyboard"] for b in row] for sent in server.sent
+            )
+            await server.batches.put([callback(3, first[2]), callback(4, second[1]), callback(5, "dl:unknown:downloads")])
+            await wait_for(lambda: bot.store.state.offset == 6)
+            edits = [body for method, body in server.calls if method == "editMessageText"]
+            assert edits[0]["text"] == "❌ Listo, no lo agrego."
+            assert "No pude agregarlo" in edits[1]["text"] and "Enter a valid URL." in edits[1]["text"]
+            assert "reply_markup" in edits[1]  # The buttons stay to try again
+            assert posts[0][0] == {"url": "https://b.example/y", "destination": "gallery"}
+            assert edits[2]["text"] == EXPIRED
+            monkeypatch.setattr("app.telegram.LINK_SECONDS", 0)
+            await server.batches.put([callback(6, second[0])])
+            await wait_for(lambda: bot.store.state.offset == 7)
+            assert [body for method, body in server.calls if method == "editMessageText"][-1]["text"] == EXPIRED
+            assert len(posts) == 1
+        finally:
+            await bot.aclose()
+            await bot.upstreams.aclose()
+    asyncio.run(run())
+
+
+def test_links_follow_the_downloads_switch(tmp_path):
+    async def run():
+        server = TelegramServer()
+        bot, _ = make_bot(tmp_path, server)
+        bot.set_command("downloads", False)
+        await bot.start()
+        try:
+            await server.batches.put([update(1, text="https://example.com/file.zip"), update(2, text="hola", user=99)])
+            await wait_for(lambda: bot.store.state.offset == 3)
+            assert len(server.sent) == 1
+            assert "reply_markup" not in server.sent[0]
+            assert "/help" in server.sent[0]["text"]
+        finally:
+            await bot.aclose()
+            await bot.upstreams.aclose()
+    asyncio.run(run())

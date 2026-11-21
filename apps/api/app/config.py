@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     localtube_service_token: str | None = None
     # The agent that runs on the server itself and updates the projects (apps/agent)
     agent_url: str = "http://localhost:3022"
+    # The video downloader's web app, whose /api/downloads the Telegram bot reads and adds links to
+    video_downloader_url: str = "http://localhost:3007"
     astro_api_url: str = "http://localhost:3024"
     astro_api_token: str | None = None
     # The Nano's current speed takes up to 5 seconds to read

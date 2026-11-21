@@ -44,6 +44,7 @@ def upstreams() -> Iterator[Callable[..., list[httpx.Request]]]:
         homenet: Routes | None = None,
         localtube: Routes | None = None,
         agent: Routes | None = None,
+        videodownloader: Routes | None = None,
     ):
         calls: list[httpx.Request] = []
         fake = Upstreams(
@@ -51,6 +52,7 @@ def upstreams() -> Iterator[Callable[..., list[httpx.Request]]]:
             homenet=_client("homenet", homenet or {}, calls),
             localtube=_client("localtube", localtube or {}, calls),
             agent=_client("agent", agent or {}, calls),
+            videodownloader=_client("videodownloader", videodownloader or {}, calls),
         )
         app.dependency_overrides[get_upstreams] = lambda: fake
         return calls

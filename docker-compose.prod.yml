@@ -20,6 +20,8 @@ services:
       # The agent that updates the projects runs on the host itself (scripts/install-agent.sh)
       AGENT_URL: ${AGENT_URL:-http://host.docker.internal:3022}
       ASTRO_API_URL: ${ASTRO_API_URL:-http://host.docker.internal:3024}
+      # The video downloader the Telegram bot shows and adds links to
+      VIDEO_DOWNLOADER_URL: ${VIDEO_DOWNLOADER_URL:-http://host.docker.internal:3007}
       ASTRO_API_TOKEN: ${ASTRO_API_TOKEN:?Set ASTRO_API_TOKEN in .env.production}
       UPSTREAM_TIMEOUT_SECONDS: ${UPSTREAM_TIMEOUT_SECONDS:-8}
       SENDER_DIR: /data/sender

@@ -31,7 +31,7 @@ The sidebar also has a module per app, with the pages that app's own web app had
 | **Network** | Live (connection chain and the Nano's download speed every second), Speed test (fast.com), Local speed (from the browser to this server), Stats (connection status, online/offline per day, top devices, bandwidth, outages), Devices (live list with block, limit and rename, and each device's history) | Home Net API |
 | **Files** | A file manager for the external disk: open its folders, download a file or a whole folder as a zip, rename, delete and create folders. Docker's data and `lost+found` are not shown, and the folders the apps write to (`videos`, `sender`, `downloads`, `gallery`, `openclaw`) cannot be renamed or deleted, only what is in them | The agent, as the server's user (`apps/agent/files.py`) |
 | **Tools** | Sender: drop files to upload them and send them as a package with a name and a 4 digit PIN; another device on the network opens it with the PIN and downloads its files one by one, and once every file is downloaded the package is deleted from the server. Downloads: paste a link and the server downloads it by itself, retrying every cut and resuming from the bytes it has (also after a restart or a blackout); a finished file has a Download button for the device, which can resume too | This API, on the external disk (`SENDER_DIR`, `DOWNLOADS_DIR`) |
-| **Telegram** | Bot connection, uptime, latest start, historical command count and persistent command switches. Users: register a private Telegram account through a five-minute `/add` window, give it a name and manage its access. `/stats` reports grid power and its last change, Bluetti charge, consumption and estimated runtime, and internet availability | Dashboard API background bot, Bluetti and Home Net APIs |
+| **Telegram** | Bot connection, uptime, latest start, historical command count and persistent command switches. Users: register a private Telegram account through a five-minute `/add` window, give it a name and manage its access. `/stats` is a quick summary; `/battery`, `/internet`, `/server` and `/downloads` give the detail of each; `/help` lists them. A link sent in the chat is offered for the video downloader | Dashboard API background bot, Bluetti, Home Net, agent and video downloader APIs |
 
 **Astro** has Chat, Skills and Memoria pages. Its host bridge connects to the local OpenClaw Gateway with a private
 token. Dashboard chats have their own context, separate from Telegram, and share Astro's skills and memory.
@@ -152,8 +152,22 @@ the initial user also removes its access and restarting does not re-add it.
 Restart the API after changing these settings (in production, use `./scripts/update.sh`). Open the new bot in Telegram,
 press **Start**, register the account as described below if needed, then send `/stats`. Only registered users' private
 chats can run commands; groups and other users are ignored except for `/add` during an open enrollment window.
-`/stats` is the only enabled command initially. The Telegram page can disable or reenable it
+Every command is enabled initially. The Telegram page can disable or reenable each one
 immediately, and the bot also synchronizes Telegram's command menu. Other slash commands receive “Comando no disponible”.
+
+| Command | Reply |
+| --- | --- |
+| `/help` (also `/start`) | The enabled commands with their descriptions |
+| `/stats` | Quick summary: grid power, Bluetti charge and runtime, internet |
+| `/battery` | Bluetti charge, state, load, time to reserve or to full, grid power now and since when, hours with and without power and outages (of a minute or more) in 24 h |
+| `/internet` | Online or not (and the failing hop), latency, current speed, last speed test, 24 h usage and the top device |
+| `/server` | CPU, RAM and each disk with bars, network now and in total, uptime and how the last shutdown went |
+| `/downloads` | The video downloader's current speed, its active, waiting and paused downloads with progress and ETA |
+
+Any other text from a registered user is checked for an `http(s)` link. The bot asks whether to add it, with
+**Sí, a Descargas**, **Sí, a Galería** and **No** buttons; a yes queues it in the video downloader (`VIDEO_DOWNLOADER_URL`,
+its web app's `/api/downloads`). The question expires after 15 minutes or an API restart, a pressed button never queues
+the link twice, and a refused link keeps the buttons to try again. Links follow the `/downloads` switch.
 
 Under **Telegram → Usuarios**, press **Agregar usuario** while the bot is connected. From the account to add, send
 `/add` to the bot in a private chat. The window closes automatically after **five minutes**, or immediately after the
@@ -180,7 +194,7 @@ values. Runtime is **to Bluetti's configured reserve percentage**, not to an emp
 is to full charge. Missing estimates remain unavailable rather than being invented.
 
 Uptime and latest start belong to the bot process and reset on an API restart, not on reconnection. The historical
-counter includes authorized slash commands (including unknown or disabled ones), but excludes ordinary messages,
+counter includes authorized slash commands (including unknown or disabled ones), messages and button presses, but excludes
 unauthorized users and dashboard requests. The counter, switches, users and update cursor live in an atomically replaced
 `state.json` under `TELEGRAM_STATE_DIR` (`apps/api/data/telegram` by default in development). Docker mounts the persistent
 `telegram-state` volume there, owned by the API user. Normal updates preserve it; include this volume in backups and

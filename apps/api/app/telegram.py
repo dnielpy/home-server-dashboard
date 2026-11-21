@@ -4,8 +4,11 @@ import asyncio
 import json
 import os
 import re
+import secrets
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from html import escape
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -13,13 +16,38 @@ import httpx
 from fastapi import Depends, Request
 from pydantic import BaseModel, Field, ValidationError
 
-from app.clients.upstream import Upstreams
+from app.clients import videodownloader
+from app.clients.upstream import UpstreamError, Upstreams
 from app.config import Settings
-from app.telegram_stats import stats_message
+from app.telegram_messages import (
+    battery_message,
+    downloads_message,
+    help_message,
+    internet_message,
+    server_message,
+    short,
+    stats_message,
+)
 from app.telegram_users import EnrollmentError, EnrollmentOut, EnrollmentWindow, TelegramCandidate, TelegramUser, UserIn
 
-COMMANDS = {"stats": "Estado de corriente, batería, consumo, autonomía e internet de la casa."}
+COMMANDS = {
+    "stats": "Resumen rápido: corriente, batería e internet de la casa.",
+    "battery": "Todo sobre la batería Bluetti: carga, consumo, autonomía y apagones.",
+    "internet": "Conexión, velocidad actual, último test y consumo de 24 h.",
+    "server": "CPU, RAM, discos, red y tiempo encendido del servidor.",
+    "downloads": "Descargas en curso y velocidad actual de descarga.",
+    "help": "Todos los comandos disponibles.",
+}
 COMMAND_PATTERN = re.compile(r"^/([a-z0-9_]{1,32})(?:@([a-z0-9_]+))?(?=\s|$)", re.IGNORECASE | re.ASCII)
+LINK_PATTERN = re.compile(r"https?://[^\s<>\"]+", re.IGNORECASE)
+CALLBACK_PATTERN = re.compile(r"dl:([A-Za-z0-9_-]{1,32}):(downloads|gallery|no)")
+# A link offered for download waits this long for its answer
+LINK_SECONDS = 15 * 60
+MAX_PENDING_LINKS = 50
+UNAVAILABLE = "🚫 Comando no disponible."
+NOT_A_LINK = "🤔 No veo un enlace ahí.\nMándame un link que empiece por <code>http://</code> o <code>https://</code>, o usa /help."
+EXPIRED = "⌛ Este enlace ya caducó. Mándamelo otra vez."
+DESTINATIONS = {"downloads": "Descargas", "gallery": "Galería"}
 
 
 class TelegramState(BaseModel):
@@ -86,6 +114,21 @@ class TelegramStatusOut(BaseModel):
     menu_synced: bool
 
 
+@dataclass
+class PendingLink:
+    user_id: int
+    url: str
+    created: float
+    # The reply once it was answered, so a retried button press shows the same instead of queuing it again
+    result: str | None = None
+
+
+def find_link(text: str) -> str | None:
+    match = LINK_PATTERN.search(text)
+    # Punctuation right after a link in a sentence is not part of it
+    return match[0].rstrip(".,;:!?)]}'") if match else None
+
+
 class TelegramError(Exception):
     def __init__(self, code: int, retry_after: float = 0) -> None:
         self.code = code
@@ -119,6 +162,7 @@ class TelegramBot:
         self._wake = asyncio.Event()
         self._synced_menu: tuple[str, ...] | None = None
         self.enrollment = EnrollmentWindow()
+        self.pending: dict[str, PendingLink] = {}
         try:
             self.store = TelegramStore(Path(settings.telegram_state_dir))
             if self.store.state.users is None:
@@ -252,7 +296,7 @@ class TelegramBot:
     async def _poll(self) -> list[dict[str, Any]]:
         # A dashboard toggle interrupts the long poll so the Telegram menu updates promptly.
         poll = asyncio.create_task(self._call(
-            "getUpdates", offset=self.store.state.offset, timeout=25, allowed_updates=["message"],
+            "getUpdates", offset=self.store.state.offset, timeout=25, allowed_updates=["message", "callback_query"],
         ))
         wake = asyncio.create_task(self._wake.wait())
         try:
@@ -291,11 +335,134 @@ class TelegramBot:
                 self.error = str(err) if isinstance(err, StateError) else "Telegram devolvió datos inesperados; reintentando."
                 await asyncio.sleep(30)
 
+    def _count(self, update_id: int) -> None:
+        # Persist the count before sending. A failed send can be retried without counting it twice.
+        if self.store.state.counted_update_id != update_id:
+            self.store.save(total_requests=self.store.state.total_requests + 1, counted_update_id=update_id)
+
+    async def _send(self, chat_id: int, text: str, **extra: Any) -> None:
+        try:
+            await self._call(
+                "sendMessage", chat_id=chat_id, text=text, parse_mode="HTML",
+                link_preview_options={"is_disabled": True}, **extra,
+            )
+        except TelegramError as err:
+            if err.code != 403:
+                raise
+            # A blocked bot cannot deliver this reply. Advance so it cannot stall the queue forever.
+            self.error = str(err)
+
+    async def _reply(self, name: str) -> str:
+        if name == "start":
+            name = "help"
+        if name not in COMMANDS or not self.enabled(name):
+            return UNAVAILABLE
+        if name == "help":
+            enabled = [(command, description) for command, description in COMMANDS.items() if self.enabled(command)]
+            return help_message(enabled, links=self.enabled("downloads"))
+        build = {
+            "stats": stats_message, "battery": battery_message, "internet": internet_message,
+            "server": server_message, "downloads": downloads_message,
+        }[name]
+        reply = await build(self.upstreams)
+        # A toggle may have changed while the sources were being read.
+        return reply if self.enabled(name) else UNAVAILABLE
+
+    def _offer(self, user_id: int, url: str) -> str:
+        now = time.monotonic()
+        self.pending = {
+            token: link for token, link in self.pending.items() if now - link.created < LINK_SECONDS
+        }
+        while len(self.pending) >= MAX_PENDING_LINKS:
+            self.pending.pop(next(iter(self.pending)))
+        token = secrets.token_urlsafe(9)
+        self.pending[token] = PendingLink(user_id=user_id, url=url, created=now)
+        return token
+
+    @staticmethod
+    def _keyboard(token: str) -> dict[str, Any]:
+        return {"inline_keyboard": [
+            [
+                {"text": "📥 Sí, a Descargas", "callback_data": f"dl:{token}:downloads"},
+                {"text": "🖼️ Sí, a Galería", "callback_data": f"dl:{token}:gallery"},
+            ],
+            [{"text": "❌ No", "callback_data": f"dl:{token}:no"}],
+        ]}
+
+    async def _text(self, user_id: int, text: str) -> None:
+        if not self.enabled("downloads"):
+            await self._send(user_id, "💡 Usa /help para ver lo que puedo hacer.")
+            return
+        url = find_link(text)
+        if url is None:
+            await self._send(user_id, NOT_A_LINK)
+            return
+        token = self._offer(user_id, url)
+        await self._send(
+            user_id, f"📎 <b>¿Agrego este enlace a las descargas?</b>\n\n🔗 <code>{escape(short(url, 300))}</code>",
+            reply_markup=self._keyboard(token),
+        )
+
+    async def _answer_link(self, user_id: int, token: str, choice: str) -> tuple[str, bool]:
+        """The message's new text, and whether to keep the buttons so the user can try again."""
+        link = self.pending.get(token)
+        if link is None or link.user_id != user_id or time.monotonic() - link.created >= LINK_SECONDS:
+            return EXPIRED, False
+        if link.result is not None:
+            return link.result, False
+        if choice == "no":
+            link.result = "❌ Listo, no lo agrego."
+            return link.result, False
+        if not self.enabled("downloads"):
+            return "🚫 Las descargas están desactivadas.", False
+        try:
+            download = await videodownloader.add(
+                self.upstreams.videodownloader, link.url, choice, key=f"telegram-{token}",
+            )
+        except UpstreamError as err:
+            reason = err.reason if err.status else "el gestor de descargas no responde"
+            return f"⚠️ <b>No pude agregarlo</b>\n{escape(short(reason or 'error desconocido', 200))}", True
+        except (ValidationError, KeyError, TypeError):
+            return "⚠️ <b>No pude agregarlo</b>\nEl gestor de descargas respondió algo inesperado.", True
+        link.result = (
+            f"✅ <b>Agregado a {DESTINATIONS[choice]}</b>\n📄 {escape(short(download.fileName))}\n\n"
+            "Míralo con /downloads"
+        )
+        return link.result, False
+
+    async def _callback(self, update_id: int, query: Any) -> None:
+        if not isinstance(query, dict) or not isinstance(query.get("id"), str):
+            return
+        sender, message = query.get("from") or {}, query.get("message") or {}
+        user_id = sender.get("id") if isinstance(sender, dict) else None
+        if type(user_id) is not int or not self.is_allowed(user_id):
+            return
+        self._count(update_id)
+        match = CALLBACK_PATTERN.fullmatch(query.get("data") or "") if isinstance(query.get("data"), str) else None
+        text, retry = await self._answer_link(user_id, match[1], match[2]) if match else (EXPIRED, False)
+        try:
+            await self._call("answerCallbackQuery", callback_query_id=query["id"])
+            chat = message.get("chat") if isinstance(message, dict) else None
+            if isinstance(chat, dict) and isinstance(chat.get("id"), int) and isinstance(message.get("message_id"), int):
+                await self._call(
+                    "editMessageText", chat_id=chat["id"], message_id=message["message_id"], text=text,
+                    parse_mode="HTML", link_preview_options={"is_disabled": True},
+                    **({"reply_markup": self._keyboard(match[1])} if retry else {}),
+                )
+        except TelegramError as err:
+            # An old button (400) or a blocked bot (403) cannot be answered; it must not stall the queue
+            if err.code not in (400, 403):
+                raise
+
     async def _process(self, update: dict[str, Any]) -> None:
         if not isinstance(update, dict) or not isinstance(update.get("update_id"), int):
             return
         update_id = update["update_id"]
         if update_id < self.store.state.offset:
+            return
+        if "callback_query" in update:
+            await self._callback(update_id, update["callback_query"])
+            self.store.save(offset=update_id + 1)
             return
         message = update.get("message") or {}
         if not isinstance(message, dict):
@@ -314,10 +481,10 @@ class TelegramBot:
         match = COMMAND_PATTERN.match(text) if private and isinstance(text, str) else None
         if match and match[2] and match[2].lower() != self.identity.username.lower():
             match = None
-        if match and authorized:
-            # Persist the count before sending. A failed send can be retried without counting it twice.
-            if self.store.state.counted_update_id != update_id:
-                self.store.save(total_requests=self.store.state.total_requests + 1, counted_update_id=update_id)
+        # Text that is not a command is offered as a download link
+        plain = authorized and isinstance(text, str) and not COMMAND_PATTERN.match(text)
+        if (match and authorized) or plain:
+            self._count(update_id)
         if match and match[1].lower() == "add":
             candidate = TelegramCandidate(
                 user_id=user_id, username=sender.get("username"),
@@ -334,24 +501,13 @@ class TelegramBot:
                 await self._call("sendMessage", chat_id=user_id, text=reply)
                 return
         if match and authorized:
-            name = match[1].lower()
-            reply = (
-                await stats_message(self.upstreams)
-                if name == "stats" and self.enabled(name) else "Comando no disponible."
-            )
-            # A toggle may have changed while the sources were being read.
-            if name in COMMANDS and not self.enabled(name):
-                reply = "Comando no disponible."
+            reply = await self._reply(match[1].lower())
             if not self.is_allowed(user_id):
                 self.store.save(offset=update_id + 1)
                 return
-            try:
-                await self._call("sendMessage", chat_id=user_id, text=reply)
-            except TelegramError as err:
-                if err.code != 403:
-                    raise
-                # A blocked bot cannot deliver this reply. Advance so it cannot stall the queue forever.
-                self.error = str(err)
+            await self._send(user_id, reply)
+        elif plain:
+            await self._text(user_id, text)
         self.store.save(offset=update_id + 1)
 
 

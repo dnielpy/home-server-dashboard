@@ -28,15 +28,23 @@ class Upstream:
     async def get(self, path: str, /, **params: Any) -> Any:
         return await self._request("GET", path, params)
 
-    async def post(self, path: str, /, timeout: float | None = None, **params: Any) -> Any:
-        return await self._request("POST", path, params, timeout)
+    async def post(
+        self, path: str, /, timeout: float | None = None, json: Any = None, headers: dict[str, str] | None = None,
+        **params: Any,
+    ) -> Any:
+        return await self._request("POST", path, params, timeout, json, headers)
 
-    async def _request(self, method: str, path: str, params: dict[str, Any], timeout: float | None = None) -> Any:
+    async def _request(
+        self, method: str, path: str, params: dict[str, Any], timeout: float | None = None, json: Any = None,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
         try:
             response = await self.http.request(
                 method,
                 path,
                 params={k: v for k, v in params.items() if v is not None},
+                json=json,
+                headers=headers,
                 # Unless the call says otherwise, the client's own
                 **({"timeout": timeout} if timeout is not None else {}),
             )
@@ -56,7 +64,9 @@ class Upstream:
 
 def _detail(response: httpx.Response) -> str:
     try:
-        return str(response.json()["detail"])
+        body = response.json()
+        # FastAPI's {"detail": …}, or the video downloader's {"error": {"message": …}}
+        return str(body["detail"] if "detail" in body else body["error"]["message"])
     except (ValueError, KeyError, TypeError):
         return response.text[:200]
 
@@ -67,6 +77,7 @@ class Upstreams:
     homenet: Upstream
     localtube: Upstream
     agent: Upstream
+    videodownloader: Upstream
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "Upstreams":
@@ -79,10 +90,11 @@ class Upstreams:
             homenet=Upstream("homenet", client(settings.homenet_api_url)),
             localtube=Upstream("localtube", client(settings.localtube_api_url, **token)),
             agent=Upstream("agent", client(settings.agent_url)),
+            videodownloader=Upstream("videodownloader", client(settings.video_downloader_url)),
         )
 
     async def aclose(self) -> None:
-        for upstream in (self.bluetti, self.homenet, self.localtube, self.agent):
+        for upstream in (self.bluetti, self.homenet, self.localtube, self.agent, self.videodownloader):
             await upstream.http.aclose()
 
 
