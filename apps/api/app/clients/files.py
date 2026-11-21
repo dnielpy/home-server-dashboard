@@ -4,7 +4,7 @@ import httpx
 from fastapi import HTTPException
 
 from app.clients.upstream import Upstream, UpstreamError
-from app.schemas import FilePathOut, FolderOut
+from app.schemas import FilePathOut, FileTransferOut, FolderOut
 
 # The agent's answers for a bad name, something that cannot be touched, a missing path, a name taken and a disk
 # that is not plugged in
@@ -41,6 +41,25 @@ async def delete(upstream: Upstream, path: str) -> FilePathOut:
 
 async def mkdir(upstream: Upstream, path: str, name: str) -> FilePathOut:
     return FilePathOut.model_validate(await _call(upstream, "POST", "/files/mkdir", path=path, name=name))
+
+
+async def move(upstream: Upstream, path: str, to: str) -> FilePathOut:
+    return FilePathOut.model_validate(await _call(upstream, "POST", "/files/move", path=path, to=to))
+
+
+async def copy(upstream: Upstream, path: str, to: str) -> FileTransferOut:
+    # Measuring a big folder before starting takes a moment; the copy itself runs in the background
+    body = await _call(upstream, "POST", "/files/copy", timeout=DELETE_TIMEOUT_SECONDS, path=path, to=to)
+    return FileTransferOut.model_validate(body)
+
+
+async def transfers(upstream: Upstream) -> list[FileTransferOut]:
+    return [FileTransferOut.model_validate(item) for item in await _call(upstream, "GET", "/files/transfers")]
+
+
+async def cancel_transfer(upstream: Upstream, transfer_id: str) -> FileTransferOut:
+    body = await _call(upstream, "POST", f"/files/transfers/{transfer_id}/cancel")
+    return FileTransferOut.model_validate(body)
 
 
 async def open_download(upstream: Upstream, path: str) -> httpx.Response:

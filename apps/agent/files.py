@@ -1,5 +1,5 @@
 """The external disk's files, for the dashboard's file manager: lists a folder, downloads a file (or a folder as a
-zip), renames, deletes and creates folders.
+zip), renames, moves, copies (in the background), deletes and creates folders.
 
 Runs in the agent, outside Docker, as the server's user, so it can change the files the apps leave on the disk. Every
 path comes relative to the disk's mount point and is checked to stay inside it, symbolic links included. Docker's
@@ -12,9 +12,12 @@ from __future__ import annotations
 import os
 import shutil
 import stat
+import threading
+import time
 import unicodedata
+import uuid
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, BinaryIO
 from urllib.parse import quote
@@ -197,6 +200,48 @@ class Disk:
             raise FilesError(403, "The server's user cannot delete it, or something in it")
         return {"path": self._relative(path)}
 
+    def _destination(self, path: Path, relative_folder: str, action: str) -> Path:
+        """Where `path` ends up inside the folder `relative_folder`, refusing a folder put inside itself."""
+        if not path.exists() and not path.is_symlink():
+            raise FilesError(404, "There is no such file or folder")
+        folder = self.resolve(relative_folder)
+        if not folder.is_dir():
+            raise FilesError(404, "There is no such destination folder")
+        source, inside = path.resolve(), folder.resolve()
+        if path.is_dir() and not path.is_symlink() and (inside == source or source in inside.parents):
+            raise FilesError(400, f"A folder cannot be {action} into itself")
+        if folder == self._root() and path.name in HIDDEN | PROTECTED:
+            raise FilesError(409, f"{path.name} is reserved for the server")
+        return folder / path.name
+
+    def move(self, relative: str, relative_folder: str) -> dict[str, Any]:
+        """Moves a file or folder into another folder of the disk. Instant: the disk is one file system."""
+        path = self.resolve(relative)
+        self._guard(path, "moved")
+        target = self._destination(path, relative_folder, "moved")
+        if target.parent == path.parent:
+            raise FilesError(409, "It is already in that folder")
+        if target.exists() or target.is_symlink():
+            raise FilesError(409, f"There is already something called {target.name} there")
+        try:
+            path.rename(target)
+        except PermissionError:
+            raise FilesError(403, "The server's user cannot move it, or cannot write in that folder")
+        except OSError as err:
+            raise FilesError(409, f"It could not be moved: {err.strerror or err}")
+        return {"path": self._relative(target)}
+
+    def copy_plan(self, relative: str, relative_folder: str) -> tuple[Path, Path, int]:
+        """Checks a copy before it starts: the source, the free name it gets in the folder, and its size in bytes."""
+        path = self.resolve(relative)
+        if path == self._root():
+            raise FilesError(403, "The disk itself cannot be copied")
+        target = free_name(self._destination(path, relative_folder, "copied"))
+        size = tree_size(path)
+        if size > shutil.disk_usage(self._root()).free:
+            raise FilesError(409, "There is not enough free space on the disk for the copy")
+        return path, target, size
+
     def mkdir(self, relative: str, name: str) -> dict[str, Any]:
         parent = self.resolve(relative)
         if not parent.is_dir():
@@ -211,6 +256,164 @@ class Disk:
         except PermissionError:
             raise FilesError(403, "The server's user cannot create folders here")
         return {"path": self._relative(target)}
+
+
+def free_name(target: Path) -> Path:
+    """`target`, or "name (copy).ext", "name (copy 2).ext"… when something already has that name."""
+    if not target.exists() and not target.is_symlink():
+        return target
+    is_file = target.is_file()
+    stem, suffix = (target.stem, target.suffix) if is_file else (target.name, "")
+    for number in range(1, 1000):
+        label = "copy" if number == 1 else f"copy {number}"
+        candidate = target.with_name(f"{stem} ({label}){suffix}")
+        if not candidate.exists() and not candidate.is_symlink():
+            return candidate
+    raise FilesError(409, f"There are too many copies of {target.name} there")
+
+
+def tree_size(path: Path) -> int:
+    """The bytes a copy of a file or folder writes; links count as nothing."""
+    if path.is_symlink():
+        return 0
+    if path.is_file():
+        return path.stat().st_size
+    total = 0
+    for folder, _, names in os.walk(path):
+        for name in names:
+            file = Path(folder, name)
+            if not file.is_symlink():
+                try:
+                    total += file.stat().st_size
+                except OSError:
+                    continue
+    return total
+
+
+class Cancelled(Exception):
+    pass
+
+
+@dataclass
+class Transfer:
+    """A copy running in the background, which the dashboard follows by its id."""
+
+    id: str
+    source: str
+    target: str
+    total: int
+    done: int = 0
+    state: str = "running"  # running, done, failed or cancelled
+    error: str | None = None
+    started: float = 0.0
+    finished: float | None = None
+    cancel: threading.Event = field(default_factory=threading.Event)
+
+    def out(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "source": self.source,
+            "target": self.target,
+            "total": self.total,
+            "done": self.done,
+            "state": self.state,
+            "error": self.error,
+            "started": self.started,
+            "finished": self.finished,
+        }
+
+
+class Transfers:
+    """The copies started from the dashboard. Finished ones are kept a while, so the page can show how they ended."""
+
+    KEEP_SECONDS = 15 * 60
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.jobs: dict[str, Transfer] = {}
+
+    def start(self, disk: Disk, relative: str, relative_folder: str) -> dict[str, Any]:
+        source, target, size = disk.copy_plan(relative, relative_folder)
+        with self.lock:
+            if any(job.state == "running" and job.target == disk._relative(target) for job in self.jobs.values()):
+                raise FilesError(409, "That copy is already running")
+            job = Transfer(
+                id=uuid.uuid4().hex,
+                source=disk._relative(source),
+                target=disk._relative(target),
+                total=size,
+                started=time.time(),
+            )
+            self.jobs[job.id] = job
+        threading.Thread(target=self._run, args=(job, source, target), daemon=True).start()
+        return job.out()
+
+    def list(self) -> list[dict[str, Any]]:
+        now = time.time()
+        with self.lock:
+            for job_id, job in list(self.jobs.items()):
+                if job.finished and now - job.finished > self.KEEP_SECONDS:
+                    del self.jobs[job_id]
+            return [job.out() for job in sorted(self.jobs.values(), key=lambda j: j.started, reverse=True)]
+
+    def cancel(self, job_id: str) -> dict[str, Any]:
+        with self.lock:
+            job = self.jobs.get(job_id)
+        if job is None:
+            raise FilesError(404, "There is no such copy")
+        if job.state != "running":
+            raise FilesError(409, "That copy already ended")
+        job.cancel.set()
+        return job.out()
+
+    def _run(self, job: Transfer, source: Path, target: Path) -> None:
+        try:
+            copy_tree(source, target, job)
+            job.state = "done"
+        except Cancelled:
+            job.state = "cancelled"
+            remove(target)
+        except OSError as err:
+            job.state = "failed"
+            job.error = f"{err.strerror or err}" + (f": {Path(err.filename).name}" if err.filename else "")
+            remove(target)
+        finally:
+            job.finished = time.time()
+
+
+def copy_tree(source: Path, target: Path, job: Transfer) -> None:
+    """Copies a file or folder, links as links, counting the bytes in `job` and stopping when it is cancelled."""
+    if source.is_symlink():
+        target.symlink_to(os.readlink(source))
+        return
+    if source.is_file():
+        copy_file(source, target, job)
+        return
+    target.mkdir()
+    for entry in sorted(os.scandir(source), key=lambda e: e.name):
+        copy_tree(Path(entry.path), target / entry.name, job)
+    shutil.copystat(source, target)
+
+
+def copy_file(source: Path, target: Path, job: Transfer) -> None:
+    with source.open("rb") as reader, target.open("xb") as writer:
+        while chunk := reader.read(CHUNK_BYTES):
+            if job.cancel.is_set():
+                raise Cancelled
+            writer.write(chunk)
+            job.done += len(chunk)
+    shutil.copystat(source, target)
+
+
+def remove(path: Path) -> None:
+    """Deletes what a copy that did not end left behind."""
+    try:
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+        elif path.is_dir():
+            shutil.rmtree(path)
+    except OSError:
+        pass
 
 
 def valid_name(name: str) -> str:

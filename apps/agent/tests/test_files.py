@@ -2,6 +2,7 @@ import io
 import json
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 import zipfile
@@ -137,5 +138,125 @@ def test_agent_serves_the_files(disk: files.Disk, monkeypatch: pytest.MonkeyPatc
         with pytest.raises(urllib.error.HTTPError) as caught:
             urllib.request.urlopen(urllib.request.Request(f"{base}/files/delete?path=videos", method="POST"))
         assert caught.value.code == 403
+    finally:
+        server.shutdown()
+
+
+def test_moves_files_and_folders_into_another_folder(disk: files.Disk) -> None:
+    (disk.root / "archive").mkdir()
+    assert disk.move("Zebra.txt", "archive") == {"path": "archive/Zebra.txt"}
+    assert (disk.root / "archive" / "Zebra.txt").read_text() == "z"
+    assert disk.move("notes/inner", "") == {"path": "inner"}
+    assert (disk.root / "inner" / "b.txt").read_text() == "world"
+    assert not (disk.root / "notes" / "inner").exists()
+
+
+def test_move_refuses_clashes_loops_and_the_apps_folders(disk: files.Disk) -> None:
+    (disk.root / "other").mkdir()
+    (disk.root / "other" / "a.txt").write_text("other")
+    assert error(lambda: disk.move("notes/a.txt", "other")).status == 409
+    assert error(lambda: disk.move("notes/a.txt", "notes")).status == 409
+    assert error(lambda: disk.move("notes", "notes/inner")).status == 400
+    assert error(lambda: disk.move("notes", "notes")).status == 400
+    assert error(lambda: disk.move("videos", "notes")).status == 403
+    assert error(lambda: disk.move("notes/a.txt", "missing")).status == 404
+    assert error(lambda: disk.move("missing.txt", "notes")).status == 404
+    assert error(lambda: disk.move("notes", "../")).status == 400
+    # Into an app's folder is fine, the folder itself is what cannot move
+    assert disk.move("notes/a.txt", "videos") == {"path": "videos/a.txt"}
+
+
+def wait(transfers: files.Transfers, job_id: str) -> dict:
+    for _ in range(200):
+        job = next(j for j in transfers.list() if j["id"] == job_id)
+        if job["state"] != "running":
+            return job
+        time.sleep(0.01)
+    raise AssertionError("the copy did not end")
+
+
+def test_copies_in_the_background_with_a_free_name(disk: files.Disk) -> None:
+    transfers = files.Transfers()
+    job = transfers.start(disk, "notes", "videos")
+    assert job["target"] == "videos/notes"
+    assert job["total"] == len("hello") + len("world")
+    done = wait(transfers, job["id"])
+    assert done["state"] == "done"
+    assert done["done"] == done["total"]
+    assert (disk.root / "videos" / "notes" / "inner" / "b.txt").read_text() == "world"
+    assert (disk.root / "notes" / "a.txt").exists()
+
+    # Copying it again next to itself gets "(copy)", then "(copy 2)"
+    assert transfers.start(disk, "notes", "")["target"] == "notes (copy)"
+    wait(transfers, transfers.list()[0]["id"])
+    assert transfers.start(disk, "Zebra.txt", "")["target"] == "Zebra (copy).txt"
+    wait(transfers, transfers.list()[0]["id"])
+    assert transfers.start(disk, "notes", "")["target"] == "notes (copy 2)"
+    wait(transfers, transfers.list()[0]["id"])
+    # The apps' folders can be copied, only not moved
+    assert transfers.start(disk, "videos/clip.mp4", "notes")["target"] == "notes/clip.mp4"
+
+
+def test_copy_refuses_loops_and_a_full_disk(disk: files.Disk, monkeypatch: pytest.MonkeyPatch) -> None:
+    transfers = files.Transfers()
+    assert error(lambda: transfers.start(disk, "notes", "notes/inner")).status == 400
+    assert error(lambda: transfers.start(disk, "", "notes")).status == 403
+    usage = files.shutil.disk_usage(disk.root)
+    monkeypatch.setattr(files.shutil, "disk_usage", lambda _: usage._replace(free=3))
+    assert error(lambda: transfers.start(disk, "notes", "")).status == 409
+
+
+def test_a_cancelled_or_failed_copy_leaves_nothing(disk: files.Disk, monkeypatch: pytest.MonkeyPatch) -> None:
+    transfers = files.Transfers()
+    started = threading.Event()
+    release = threading.Event()
+    real_copy_file = files.copy_file
+
+    def slow_copy_file(source, target, job):
+        started.set()
+        release.wait(5)
+        real_copy_file(source, target, job)
+
+    monkeypatch.setattr(files, "copy_file", slow_copy_file)
+    job = transfers.start(disk, "notes", "videos")
+    started.wait(5)
+    assert transfers.cancel(job["id"])["state"] == "running"
+    release.set()
+    assert wait(transfers, job["id"])["state"] == "cancelled"
+    assert not (disk.root / "videos" / "notes").exists()
+    assert error(lambda: transfers.cancel(job["id"])).status == 409
+    assert error(lambda: transfers.cancel("0" * 32)).status == 404
+
+    def broken_copy_file(source, target, job):
+        raise PermissionError(13, "Permission denied", str(source))
+
+    monkeypatch.setattr(files, "copy_file", broken_copy_file)
+    failed = wait(transfers, transfers.start(disk, "notes", "videos")["id"])
+    assert failed["state"] == "failed"
+    assert failed["error"] == "Permission denied: a.txt"
+    assert not (disk.root / "videos" / "notes").exists()
+
+
+def test_agent_moves_and_copies(disk: files.Disk, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(agent, "external_disk", lambda: disk)
+    monkeypatch.setattr(agent, "TRANSFERS", files.Transfers())
+    server = ThreadingHTTPServer(("127.0.0.1", 0), agent.Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_port}"
+
+    def post(path: str) -> dict:
+        with urllib.request.urlopen(urllib.request.Request(f"{base}{path}", method="POST")) as response:
+            return json.load(response)
+
+    try:
+        assert post("/files/move?path=Zebra.txt&to=notes") == {"path": "notes/Zebra.txt"}
+        job = post("/files/copy?path=notes&to=videos")
+        assert job["state"] == "running" and job["target"] == "videos/notes"
+        assert wait(agent.TRANSFERS, job["id"])["state"] == "done"
+        with urllib.request.urlopen(f"{base}/files/transfers") as response:
+            assert [j["id"] for j in json.load(response)] == [job["id"]]
+        with pytest.raises(urllib.error.HTTPError) as caught:
+            post(f"/files/transfers/{job['id']}/cancel")
+        assert caught.value.code == 409
     finally:
         server.shutdown()

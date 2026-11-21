@@ -11,5 +11,5 @@ node_modules/
 
 .turbo/
 
-# Sender packages and Downloader files in development (apps/api)
+# Sender packages in development (apps/api)
 apps/api/data/

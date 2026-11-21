@@ -497,7 +497,6 @@ def test_dashboard_lifespan_without_telegram_credentials(tmp_path, monkeypatch):
     config = Settings(
         _env_file=None, telegram_bot_token=None, telegram_owner_user_id=None,
         telegram_state_dir=str(tmp_path / "telegram"), sender_dir=str(tmp_path / "sender"),
-        downloads_dir=str(tmp_path / "downloads"),
     )
     sources, _ = upstreams({})
     monkeypatch.setattr("app.main.get_settings", lambda: config)

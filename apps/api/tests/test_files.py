@@ -68,3 +68,48 @@ def test_download_refused(client, upstreams) -> None:
     response = client.get("/files/download", params={"path": "missing"})
     assert response.status_code == 404
     assert response.json()["detail"] == "There is no such file"
+
+
+TRANSFER = {
+    "id": "a" * 32,
+    "source": "notes",
+    "target": "videos/notes",
+    "total": 10,
+    "done": 0,
+    "state": "running",
+    "error": None,
+    "started": 1763020000.5,
+    "finished": None,
+}
+
+
+def test_moves_and_copies(client, upstreams) -> None:
+    calls = upstreams(
+        agent={
+            "/files/move": {"path": "archive/a.txt"},
+            "/files/copy": TRANSFER,
+            "/files/transfers": [TRANSFER],
+            f"/files/transfers/{'a' * 32}/cancel": TRANSFER,
+        }
+    )
+    moved = client.post("/files/move", params={"path": "notes/a.txt", "to": "archive"})
+    assert moved.json() == {"path": "archive/a.txt"}
+    assert calls[0].url.params["to"] == "archive"
+    assert client.post("/files/copy", params={"path": "notes", "to": "videos"}).json() == TRANSFER
+    assert client.get("/files/transfers").json() == [TRANSFER]
+    assert client.post(f"/files/transfers/{'a' * 32}/cancel").json() == TRANSFER
+    assert client.post("/files/transfers/nope/cancel").status_code == 422
+    assert client.post("/files/move", params={"path": "a"}).status_code == 422
+
+
+def test_move_and_copy_refusals_pass_through(client, upstreams) -> None:
+    upstreams(
+        agent={
+            "/files/move": (409, {"detail": "There is already something called a.txt there"}),
+            "/files/copy": (400, {"detail": "A folder cannot be copied into itself"}),
+        }
+    )
+    response = client.post("/files/move", params={"path": "notes/a.txt", "to": "other"})
+    assert response.status_code == 409
+    assert response.json()["detail"].startswith("There is already")
+    assert client.post("/files/copy", params={"path": "notes", "to": "notes/inner"}).status_code == 400

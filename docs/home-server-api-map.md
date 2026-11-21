@@ -45,7 +45,7 @@ Para redactar el resumen:
 2. **Energía:** `battery` (`soc`, `state`, `load_w`, `hours_left`, `eta`); `battery_detail` (`computed_at`, `status`, `soc_estimate`, rangos de ETA); `power` (`receiving_ac`, `outage_ongoing`, horas con/sin red en 24 h). Revisa `computed_at` y `status` antes de decir «ahora».
 3. **Internet:** `internet_status` (`online`, `break_at`, último corte y horas online/offline), `internet_outages_24h` y `network_speed` (descarga/subida instantánea del Nano). `network_usage_24h` es consumo acumulado, no velocidad. `last_speed_test` es un test guardado, no el ancho de banda actual.
 4. **Servidor:** `server` (`updated_at`, `cpu_percent`, `memory.percent`, `disks`, `network`, `boot`) y `projects` (estado de los cuatro proyectos y contenedores). Distingue tráfico de la NIC del servidor de tráfico WAN del Nano.
-5. **Descargas:** `localtube.downloading.items` incluye la cola de LocalTube, con `status`, `progress`, `speed`, `eta`. `tools_downloads` es **otra** cola, la herramienta Downloads del dashboard: pendientes = `queued` y `downloading`; menciona `paused` y `failed` aparte. No sumar las dos como si fueran una sola.
+5. **Descargas:** `localtube.downloading.items` incluye la cola de LocalTube, con `status`, `progress`, `speed`, `eta`.
 6. **LocalTube:** `localtube.watch_time` es el tiempo por perfil **acumulado desde siempre**. Para las últimas 24 h hace falta la ruta original con token; ver abajo.
 
 Conversión: `bytes/s × 8 / 1 000 000 = Mb/s`; `bytes / 1 000 000 000 = GB` decimales. Indica unidades. `rx` del Nano es descarga y `tx` es subida. `network.rx_bytes_per_second` del servidor mide solo su interfaz predeterminada.
@@ -65,7 +65,6 @@ Conversión: `bytes/s × 8 / 1 000 000 = Mb/s`; `bytes / 1 000 000 000 = GB` dec
 | ¿Qué descarga LocalTube? | `/dashboard/localtube` | `downloading.count/items` y `watch_time`; Dashboard añade el token de servicio necesario. |
 | ¿Cómo está el servidor? | `/dashboard/system` | `updated_at`, CPU %, memoria, discos, red y arranque; agente `/system`. |
 | ¿Tráfico histórico del servidor? | `/dashboard/system/traffic` | 7 días, promedios por 15 min; agente `/system/traffic`. |
-| ¿Descargas de Tools pendientes? | `/downloads` | Lista con `state`, `received`, `size`, `speed`, `error`, `retry_at`, etc. |
 | ¿Qué proyectos/containers hay? | `/management/projects` | `name`, `branch`, `service.up`, `service.since`, `behind`, `updating`, etc.; agente `/projects`. |
 
 Dashboard devuelve `502` y `source` si una fuente falla. Las consultas al upstream tienen límite de 8 segundos. Un dato ausente o `null` significa que no hay medición suficiente o que la fuente no respondió; nunca lo reemplaces por cero.
@@ -105,7 +104,6 @@ No ejecutes `POST /speed-test` para un resumen: lanza una prueba nueva y consume
 ## Dónde se implementa cada conexión
 
 - Dashboard API: `apps/api/app/routers/dashboard.py`, `apps/api/app/clients/{bluetti,homenet,localtube,agent}.py`, `apps/api/app/clients/upstream.py`, `apps/api/app/schemas.py`.
-- Descargas Tools: `apps/api/app/routers/downloads.py` y `apps/api/app/downloader.py`.
 - Web principal: `apps/web/lib/api.ts`, tarjetas en `apps/web/components/dashboard/`; las lecturas en vivo pasan por `/api/network-speed` y `/api/system` en Next.js.
 - Web de energía: `apps/web/lib/bluetti-api.ts`; web de red: `apps/web/lib/homenet-api.ts`.
 - En el servidor, repositorios en `/home/lianny/home-server/{home-server-dashboard,bluetti-powerstation-api,home-net-dashboard,local-tube}`. La configuración activa de Dashboard está en `/home/lianny/home-server/home-server-dashboard/.env.production` (contiene secretos: no copiar ni citar sus valores sensibles).

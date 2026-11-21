@@ -26,7 +26,6 @@ ROUTES = {
     "internet_outages_24h": (3003, "/outages?hours=24"),
     "localtube": (3021, "/dashboard/localtube"),
     "server": (3021, "/dashboard/system"),
-    "tools_downloads": (3021, "/downloads"),
     "projects": (3021, "/management/projects"),
 }
 
@@ -54,10 +53,6 @@ def compact(name, result):
         del data["periods"]
     elif name == "internet_outages_24h":
         result["data"] = {"count": len(data), "recent": data[-10:]}
-    elif name == "tools_downloads":
-        # Download URLs can contain private query parameters or credentials.
-        for item in data:
-            item.pop("url", None)
     return result
 
 

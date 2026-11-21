@@ -14,48 +14,16 @@ import { Panel, PanelEmpty } from "@/components/ui/panel";
 import type { FileEntry, Folder } from "@/lib/api";
 import { formatBytes } from "@/lib/format";
 
+import { BUTTON, BUTTON_TONES, callFiles, folderHref, INPUT, join, message } from "./files-client";
+import { FolderPicker, type PickerRequest } from "./folder-picker";
+import { Transfers } from "./transfers";
+
 // The second press that confirms deleting has to come within this long
 const CONFIRM_MS = 3_000;
 
-const BUTTON =
-  "inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ring-1 ring-inset transition disabled:pointer-events-none disabled:opacity-40";
-const BUTTON_TONES = {
-  violet: "bg-violet-500/10 text-violet-700 ring-violet-500/30 hover:bg-violet-500/15 dark:text-violet-300",
-  neutral: "bg-surface text-foreground ring-surface-border hover:bg-surface-hover",
-  red: "bg-red-500/10 text-red-600 ring-red-500/30 hover:bg-red-500/15 dark:text-red-400",
-};
-const INPUT =
-  "min-w-0 flex-1 rounded-lg bg-surface px-2.5 py-1 text-sm text-foreground ring-1 ring-surface-border outline-none ring-inset focus:ring-violet-500/60";
-
 const modifiedFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
-class FilesRequestError extends Error {}
-
-async function callFiles<T>(action: string, params: Record<string, string>, method: "GET" | "POST" = "GET"): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`/api/files${action}?${new URLSearchParams(params)}`, { method, cache: "no-store" });
-  } catch {
-    throw new FilesRequestError("Could not reach the dashboard");
-  }
-  const body = await response.json().catch(() => null);
-  if (!response.ok) throw new FilesRequestError(body?.detail ?? `The dashboard answered ${response.status}`);
-  return body as T;
-}
-
-function message(error: unknown): string {
-  return error instanceof FilesRequestError ? error.message : "Something went wrong";
-}
-
-function join(folder: string, name: string): string {
-  return folder ? `${folder}/${name}` : name;
-}
-
-function folderHref(path: string): string {
-  return path ? `/files?${new URLSearchParams({ path })}` : "/files";
-}
-
-/** A file manager for the external disk: open folders, download, rename and delete what is in them. */
+/** A file manager for the external disk: open folders, download, rename, move, copy and delete what is in them. */
 export function FilesExplorer() {
   const router = useRouter();
   const path = useSearchParams().get("path") ?? "";
@@ -65,6 +33,9 @@ export function FilesExplorer() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [creating, setCreating] = useState(false);
+  // The move or copy whose destination is being picked, and a count of the copies started, to read them again
+  const [picking, setPicking] = useState<PickerRequest | null>(null);
+  const [copiesStarted, setCopiesStarted] = useState(0);
   // Another folder starts without the last one's filter or new folder
   const [openPath, setOpenPath] = useState(path);
   if (openPath !== path) {
@@ -191,6 +162,8 @@ export function FilesExplorer() {
           />
         )}
 
+        <Transfers started={copiesStarted} onFinished={reload} />
+
         {error && <Callout tone="red">{error}</Callout>}
         {!shown && !error && (
           <p className="flex items-center gap-2 text-sm text-muted">
@@ -215,11 +188,27 @@ export function FilesExplorer() {
         {entries.length > 0 && (
           <ul className="flex flex-col gap-1.5">
             {entries.map((entry) => (
-              <EntryRow key={entry.name} folder={path} entry={entry} onOpen={open} onChanged={reload} />
+              <EntryRow
+                key={entry.name}
+                folder={path}
+                entry={entry}
+                onOpen={open}
+                onChanged={reload}
+                onPick={(mode) => setPicking({ mode, entry, path: join(path, entry.name) })}
+              />
             ))}
           </ul>
         )}
       </div>
+      <FolderPicker
+        request={picking}
+        onClose={() => setPicking(null)}
+        onDone={(copy) => {
+          setPicking(null);
+          if (copy) setCopiesStarted((count) => count + 1);
+          else reload();
+        }}
+      />
     </Panel>
   );
 }
@@ -229,11 +218,14 @@ function EntryRow({
   entry,
   onOpen,
   onChanged,
+  onPick,
 }: {
   folder: string;
   entry: FileEntry;
   onOpen: (path: string) => void;
   onChanged: () => void;
+  /** Opens the folder picker to move or copy it somewhere else on the disk. */
+  onPick: (mode: PickerRequest["mode"]) => void;
 }) {
   const path = join(folder, entry.name);
   const [renaming, setRenaming] = useState(false);
@@ -321,7 +313,7 @@ function EntryRow({
           </span>
         </span>
         {!renaming && (
-          <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          <div className="ml-auto flex max-w-full min-w-0 flex-wrap items-center justify-end gap-1.5">
             <a
               href={`/api/files/download?${new URLSearchParams({ path })}`}
               download
@@ -331,8 +323,14 @@ function EntryRow({
               <DownloadIcon className="h-3.5 w-3.5" />
               {isFolder ? "Zip" : "Download"}
             </a>
+            <button type="button" onClick={() => onPick("copy")} disabled={busy} className={`${BUTTON} ${BUTTON_TONES.neutral}`}>
+              Copy
+            </button>
             {!entry.protected && (
               <>
+                <button type="button" onClick={() => onPick("move")} disabled={busy} className={`${BUTTON} ${BUTTON_TONES.neutral}`}>
+                  Move
+                </button>
                 <button
                   type="button"
                   onClick={() => setRenaming(true)}

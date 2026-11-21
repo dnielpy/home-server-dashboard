@@ -29,8 +29,8 @@ The sidebar also has a module per app, with the pages that app's own web app had
 |---|---|---|
 | **Energy** | Live (power flow of the latest reading), Battery (battery level, AC output, runtime estimate), Blackouts (power status and the longest blackouts and periods with power) | Bluetti API |
 | **Network** | Live (connection chain and the Nano's download speed every second), Speed test (fast.com), Local speed (from the browser to this server), Stats (connection status, online/offline per day, top devices, bandwidth, outages), Devices (live list with block, limit and rename, and each device's history) | Home Net API |
-| **Files** | A file manager for the external disk: open its folders, download a file or a whole folder as a zip, rename, delete and create folders. Docker's data and `lost+found` are not shown, and the folders the apps write to (`videos`, `sender`, `downloads`, `gallery`, `openclaw`) cannot be renamed or deleted, only what is in them | The agent, as the server's user (`apps/agent/files.py`) |
-| **Tools** | Sender: drop files to upload them and send them as a package with a name and a 4 digit PIN; another device on the network opens it with the PIN and downloads its files one by one, and once every file is downloaded the package is deleted from the server. Downloads: paste a link and the server downloads it by itself, retrying every cut and resuming from the bytes it has (also after a restart or a blackout); a finished file has a Download button for the device, which can resume too | This API, on the external disk (`SENDER_DIR`, `DOWNLOADS_DIR`) |
+| **Files** | A file manager for the external disk: open its folders, download a file or a whole folder as a zip, rename, delete and create folders, and move or copy files and folders to another folder of the disk (copies run in the background with their progress, and can be cancelled). Docker's data and `lost+found` are not shown, and the folders the apps write to (`videos`, `sender`, `downloads`, `gallery`, `openclaw`) cannot be renamed, moved or deleted, only what is in them | The agent, as the server's user (`apps/agent/files.py`) |
+| **Tools** | Sender: drop files to upload them and send them as a package with a name and a 4 digit PIN; another device on the network opens it with the PIN and downloads its files one by one, and once every file is downloaded the package is deleted from the server. Downloads are done by JDownloader in its own project (`downloader`) | This API, on the external disk (`SENDER_DIR`) |
 | **Telegram** | Bot connection, uptime, latest start, historical command count and persistent command switches. Users: register a private Telegram account through a five-minute `/add` window, give it a name and manage its access. `/stats` is a quick summary; `/battery`, `/internet`, `/server` and `/downloads` give the detail of each; `/help` lists them. A link sent in the chat is offered for the video downloader | Dashboard API background bot, Bluetti, Home Net, agent and video downloader APIs |
 
 **Astro** has Chat, Skills and Memoria pages. Its host bridge connects to the local OpenClaw Gateway with a private
@@ -91,14 +91,14 @@ pnpm dev
 ## Production
 
 ```bash
-cp .env.production.example .env.production   # fill in LOCALTUBE_SERVICE_TOKEN, SENDER_HOST_DIR and DOWNLOADS_HOST_DIR
+cp .env.production.example .env.production   # fill in LOCALTUBE_SERVICE_TOKEN and SENDER_HOST_DIR
 ./scripts/update.sh
 ```
 
 The API container reaches the other apps through the ports they publish on the host (`host.docker.internal`).
 The web app is published on `WEB_PORT` (3020) and the API on `API_PORT` (3021).
-Sender's packages go to `SENDER_HOST_DIR` and the Downloader's files to `DOWNLOADS_HOST_DIR`, folders on the external
-disk that the API container's user (uid 10001) can write to: `sudo mkdir -p <folder> && sudo chown 10001 <folder>`.
+Sender's packages go to `SENDER_HOST_DIR`, a folder on the external disk that the API container's user (uid 10001) can
+write to: `sudo mkdir -p <folder> && sudo chown 10001 <folder>`.
 
 ### Agent
 

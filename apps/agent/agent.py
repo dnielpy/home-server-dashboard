@@ -791,6 +791,30 @@ def _files_mkdir(query):
     return on_disk(lambda disk: disk.mkdir(param(query, "path"), param(query, "name")))
 
 
+@route("POST", "/files/move")
+def _files_move(query):
+    return on_disk(lambda disk: disk.move(param(query, "path"), param(query, "to")))
+
+
+# The copies started from the dashboard, which run in the background
+TRANSFERS = files.Transfers()
+
+
+@route("POST", "/files/copy")
+def _files_copy(query):
+    return on_disk(lambda disk: TRANSFERS.start(disk, param(query, "path"), param(query, "to")))
+
+
+@route("GET", "/files/transfers")
+def _files_transfers(query):
+    return TRANSFERS.list()
+
+
+@route("POST", "/files/transfers/(?P<job_id>[0-9a-f]{32})/cancel")
+def _files_transfer_cancel(query, job_id):
+    return on_disk(lambda disk: TRANSFERS.cancel(job_id))
+
+
 @route("GET", "/projects/(?P<name>[^/]+)/logs")
 def _logs(query, name):
     tail = query.get("tail", [""])[0]

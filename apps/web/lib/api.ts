@@ -373,30 +373,6 @@ export type SenderUnlock = {
   token: string;
 };
 
-export type ServerDownloadState = "queued" | "downloading" | "paused" | "done" | "failed";
-
-/** A file the server downloads by itself (Tools › Downloads). */
-export type ServerDownload = {
-  id: string;
-  url: string;
-  name: string;
-  state: ServerDownloadState;
-  /** The whole file's size, null until the server it comes from says it. */
-  size: number | null;
-  /** The bytes already on the server; a download goes on from here. */
-  received: number;
-  /** Bytes per second over the last few seconds. */
-  speed: number;
-  /** The last cut while it is retried, or why it failed. */
-  error: string | null;
-  attempts: number;
-  max_attempts: number;
-  /** When the next try is, while it waits after a cut. */
-  retry_at: string | null;
-  created_at: string;
-  finished_at: string | null;
-};
-
 // Files: the external disk, as the agent on the server lists it. Paths are relative to the disk, "" for its top.
 
 export type FileEntry = {
@@ -415,4 +391,20 @@ export type Folder = {
   path: string;
   entries: FileEntry[];
   disk: { total: number; free: number };
+};
+
+/** A copy the agent runs in the background (Files › Copy). */
+export type FileTransfer = {
+  id: string;
+  /** What is copied and where the copy goes, relative to the disk. */
+  source: string;
+  target: string;
+  /** Bytes to copy and copied so far. */
+  total: number;
+  done: number;
+  state: "running" | "done" | "failed" | "cancelled";
+  error: string | null;
+  /** Unix seconds. */
+  started: number;
+  finished: number | null;
 };
