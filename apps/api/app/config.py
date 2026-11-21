@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +22,15 @@ class Settings(BaseSettings):
     # Where the Downloader keeps the files it downloads, and how many it downloads at once
     downloads_dir: str = "./data/downloads"
     downloads_parallel: int = 2
+    telegram_bot_token: SecretStr | None = None
+    # One-time bootstrap when the persisted state has no user registry yet.
+    telegram_owner_user_id: int | None = Field(default=None, gt=0)
+    telegram_state_dir: str = "./data/telegram"
+
+    @field_validator("telegram_bot_token", "telegram_owner_user_id", mode="before")
+    @classmethod
+    def empty_telegram_setting(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
 
 
 @lru_cache

@@ -18,7 +18,9 @@ COPY app app
 FROM python:3.12-slim-bookworm
 ENV PATH=/app/.venv/bin:$PATH \
     PYTHONUNBUFFERED=1
-RUN useradd --system --uid 10001 --no-create-home app
+RUN useradd --system --uid 10001 --no-create-home app \
+    && mkdir -p /data/telegram \
+    && chown app:app /data/telegram
 WORKDIR /app
 COPY --from=build --chown=app:app /app /app
 USER app

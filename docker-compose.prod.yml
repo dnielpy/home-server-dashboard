@@ -25,11 +25,15 @@ services:
       SENDER_DIR: /data/sender
       DOWNLOADS_DIR: /data/downloads
       DOWNLOADS_PARALLEL: ${DOWNLOADS_PARALLEL:-2}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_OWNER_USER_ID: ${TELEGRAM_OWNER_USER_ID:-}
+      TELEGRAM_STATE_DIR: /data/telegram
     volumes:
       # Sender's packages, on the external disk; the folder has to be writable by the container's user (uid 10001)
       - ${SENDER_HOST_DIR:?Set SENDER_HOST_DIR to a folder on the external disk for Sender}:/data/sender
       # The Downloader's files, on the external disk too, with the same owner
       - ${DOWNLOADS_HOST_DIR:?Set DOWNLOADS_HOST_DIR to a folder on the external disk for the Downloader}:/data/downloads
+      - telegram-state:/data/telegram
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -56,3 +60,6 @@ services:
     ports:
       - "${WEB_PORT:-3020}:3000"
     logging: *logging
+
+volumes:
+  telegram-state:

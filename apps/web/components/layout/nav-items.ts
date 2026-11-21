@@ -16,7 +16,9 @@ import { RouterIcon } from "@/components/icons/router-icon";
 import { SendIcon } from "@/components/icons/send-icon";
 import { ServerIcon } from "@/components/icons/server-icon";
 import { ToolboxIcon } from "@/components/icons/toolbox-icon";
+import { TelegramIcon } from "@/components/icons/telegram-icon";
 import { TrafficIcon } from "@/components/icons/traffic-icon";
+import { UsersIcon } from "@/components/icons/users-icon";
 import { WrenchIcon } from "@/components/icons/wrench-icon";
 
 export type NavLink = {
@@ -46,6 +48,14 @@ export function isActive(link: NavLink, pathname: string): boolean {
 
 export const NAV_ITEMS: NavEntry[] = [
   { href: "/", label: "Dashboard", Icon: DashboardIcon },
+  {
+    label: "Telegram",
+    Icon: TelegramIcon,
+    children: [
+      { href: "/telegram", label: "Bot", Icon: TelegramIcon },
+      { href: "/telegram/users", label: "Usuarios", Icon: UsersIcon },
+    ],
+  },
   {
     label: "Astro",
     Icon: AstroIcon,

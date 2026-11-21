@@ -9,9 +9,10 @@ from fastapi.responses import JSONResponse
 from app.clients.upstream import UpstreamError, Upstreams
 from app.config import get_settings
 from app.downloader import Downloader
-from app.routers import astro, dashboard, downloads, files, health, management, sender
+from app.routers import astro, dashboard, downloads, files, health, management, sender, telegram
 from app.sender import SenderStore, remove_old_drafts
 from app.status import StatusTracker, watch
+from app.telegram import TelegramBot
 
 
 @asynccontextmanager
@@ -23,11 +24,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await app.state.downloader.start()
     watcher = asyncio.create_task(watch(app.state.upstreams, app.state.status))
     cleaner = asyncio.create_task(remove_old_drafts(app.state.sender))
-    yield
-    watcher.cancel()
-    cleaner.cancel()
-    await app.state.downloader.aclose()
-    await app.state.upstreams.aclose()
+    app.state.telegram = TelegramBot(get_settings(), app.state.upstreams)
+    await app.state.telegram.start()
+    try:
+        yield
+    finally:
+        await app.state.telegram.aclose()
+        watcher.cancel()
+        cleaner.cancel()
+        await asyncio.gather(watcher, cleaner, return_exceptions=True)
+        await app.state.downloader.aclose()
+        await app.state.upstreams.aclose()
 
 
 app = FastAPI(title="Home Server Dashboard API", lifespan=lifespan)
@@ -38,6 +45,7 @@ app.include_router(sender.router)
 app.include_router(downloads.router)
 app.include_router(astro.router)
 app.include_router(files.router)
+app.include_router(telegram.router)
 
 
 @app.exception_handler(UpstreamError)

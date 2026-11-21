@@ -31,6 +31,7 @@ The sidebar also has a module per app, with the pages that app's own web app had
 | **Network** | Live (connection chain and the Nano's download speed every second), Speed test (fast.com), Local speed (from the browser to this server), Stats (connection status, online/offline per day, top devices, bandwidth, outages), Devices (live list with block, limit and rename, and each device's history) | Home Net API |
 | **Files** | A file manager for the external disk: open its folders, download a file or a whole folder as a zip, rename, delete and create folders. Docker's data and `lost+found` are not shown, and the folders the apps write to (`videos`, `sender`, `downloads`, `gallery`, `openclaw`) cannot be renamed or deleted, only what is in them | The agent, as the server's user (`apps/agent/files.py`) |
 | **Tools** | Sender: drop files to upload them and send them as a package with a name and a 4 digit PIN; another device on the network opens it with the PIN and downloads its files one by one, and once every file is downloaded the package is deleted from the server. Downloads: paste a link and the server downloads it by itself, retrying every cut and resuming from the bytes it has (also after a restart or a blackout); a finished file has a Download button for the device, which can resume too | This API, on the external disk (`SENDER_DIR`, `DOWNLOADS_DIR`) |
+| **Telegram** | Bot connection, uptime, latest start, historical command count and persistent command switches. Users: register a private Telegram account through a five-minute `/add` window, give it a name and manage its access. `/stats` reports grid power and its last change, Bluetti charge, consumption and estimated runtime, and internet availability | Dashboard API background bot, Bluetti and Home Net APIs |
 
 **Astro** has Chat, Skills and Memoria pages. Its host bridge connects to the local OpenClaw Gateway with a private
 token. Dashboard chats have their own context, separate from Telegram, and share Astro's skills and memory.
@@ -39,7 +40,7 @@ token. Dashboard chats have their own context, separate from Telegram, and share
 
 ```
 apps/
-  api/     FastAPI backend: calls the APIs of the other apps and serves what each card needs (no database)
+  api/     FastAPI backend: calls the other apps, serves the dashboard and runs its private Telegram bot
   web/     Next.js frontend
   agent/   Runs on the server itself, outside Docker: git and docker for the Settings pages (standard library only)
   astro/   Runs on the host: narrow OpenClaw Gateway bridge for Chat, Skills and Memoria
@@ -137,3 +138,56 @@ Memory saves use Gateway compare-and-set plus OpenClaw's memory provenance store
 trusted provenance. The provenance function is an internal OpenClaw interface; after upgrading OpenClaw, reinstall the
 bridge and verify memory editing. If the interface is unavailable, the bridge refuses edits instead of overwriting a
 memory file without its trust record.
+
+### Telegram
+
+Create a **new, dedicated bot** with `/newbot` in [@BotFather](https://t.me/BotFather), separate from Astro/OpenClaw.
+Save its token as `TELEGRAM_BOT_TOKEN` in `apps/api/.env` for development or `.env.production` on the server.
+Without a token the rest of the dashboard works and Telegram shows the missing configuration. Keep the token in the
+server environment; the web app never receives it. `TELEGRAM_OWNER_USER_ID` is now optional: it seeds the initial user
+as “Propietario” when creating or migrating a state file that has no user registry yet. Existing installations retain
+that user's access, their counter and command switches. Afterwards the saved user list is authoritative, so deleting
+the initial user also removes its access and restarting does not re-add it.
+
+Restart the API after changing these settings (in production, use `./scripts/update.sh`). Open the new bot in Telegram,
+press **Start**, register the account as described below if needed, then send `/stats`. Only registered users' private
+chats can run commands; groups and other users are ignored except for `/add` during an open enrollment window.
+`/stats` is the only enabled command initially. The Telegram page can disable or reenable it
+immediately, and the bot also synchronizes Telegram's command menu. Other slash commands receive “Comando no disponible”.
+
+Under **Telegram → Usuarios**, press **Agregar usuario** while the bot is connected. From the account to add, send
+`/add` to the bot in a private chat. The window closes automatically after **five minutes**, or immediately after the
+first eligible `/add`, whichever comes first. Repeated clicks do not extend it, old queued messages cannot claim it,
+and only one account is captured. An already registered account closes the window without creating a duplicate.
+The page shows the detected Telegram name, username and ID; enter a display name and press **Guardar usuario** to
+grant access. Detection alone does not authorize the account. You can cancel an open window or a captured registration.
+Once an ID is captured the bot stops listening for more registrations, even while you are entering the name.
+
+The list supports deleting any registered account, which revokes access immediately, including replies still being
+prepared. Registered users survive API restarts. Enrollment windows and captured-but-unsaved registrations are kept
+only in memory and are canceled on restart; they never reopen automatically. `/add` does not register anyone outside
+an explicitly opened window. Enrollment acknowledgements from unregistered accounts do not increase the command count.
+
+The bot uses outbound HTTPS long polling, so no public endpoint or incoming port is needed. Run **one API worker and
+one polling instance per bot token**; don't share it with OpenClaw or a webhook. The page shows connection problems,
+invalid tokens and polling conflicts. Network failures retry automatically, respecting Telegram's rate limits. If the
+home server has no internet, Telegram must wait for connectivity to return. Telegram retains pending updates for up to
+24 hours; it cannot answer while the home server is offline.
+
+`/stats` uses the latest stored readings from Bluetti and Home Net, with dates in the same UTC−4 zone as the dashboard.
+Readings older than three minutes are explicitly marked as the last reading. A failed source doesn't hide the other
+values. Runtime is **to Bluetti's configured reserve percentage**, not to an empty battery; while charging, the estimate
+is to full charge. Missing estimates remain unavailable rather than being invented.
+
+Uptime and latest start belong to the bot process and reset on an API restart, not on reconnection. The historical
+counter includes authorized slash commands (including unknown or disabled ones), but excludes ordinary messages,
+unauthorized users and dashboard requests. The counter, switches, users and update cursor live in an atomically replaced
+`state.json` under `TELEGRAM_STATE_DIR` (`apps/api/data/telegram` by default in development). Docker mounts the persistent
+`telegram-state` volume there, owned by the API user. Normal updates preserve it; include this volume in backups and
+don't use `docker compose down -v` if you want to keep its history. A different bot token for the same bot preserves
+the cursor; a different bot identity resets the cursor while preserving the historical count and switches.
+
+Processed updates are not counted again after reconnecting or restarting. As with any Telegram `sendMessage` call,
+an interrupted connection or a crash immediately after sending can cause a duplicate reply when retried; the count
+still advances only once. A corrupt or unwritable state file stops the bot and shows an error without stopping the
+dashboard or silently resetting its history.
