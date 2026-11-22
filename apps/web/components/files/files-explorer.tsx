@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
-import { DownloadIcon } from "@/components/icons/download-icon";
 import { FileIcon } from "@/components/icons/file-icon";
 import { FolderIcon } from "@/components/icons/folder-icon";
 import { RefreshIcon } from "@/components/icons/refresh-icon";
@@ -14,16 +13,19 @@ import { Panel, PanelEmpty } from "@/components/ui/panel";
 import type { FileEntry, Folder } from "@/lib/api";
 import { formatBytes } from "@/lib/format";
 
-import { BUTTON, BUTTON_TONES, callFiles, folderHref, INPUT, join, message } from "./files-client";
-import { FolderPicker, type PickerRequest } from "./folder-picker";
+import { ActionsMenu } from "./actions-menu";
+import { BUTTON, BUTTON_TONES, callFiles, downloadHref, folderHref, INPUT, join, message } from "./files-client";
+import { FolderPicker, type PickerRequest, type PickerResult } from "./folder-picker";
 import { Transfers } from "./transfers";
 
-// The second press that confirms deleting has to come within this long
-const CONFIRM_MS = 3_000;
+type Failure = PickerResult["failures"][number];
 
 const modifiedFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
-/** A file manager for the external disk: open folders, download, rename, move, copy and delete what is in them. */
+/**
+ * A file manager for the external disk: open folders, download, rename, move, copy and delete what is in them, one at
+ * a time or several selected together.
+ */
 export function FilesExplorer() {
   const router = useRouter();
   const path = useSearchParams().get("path") ?? "";
@@ -36,12 +38,17 @@ export function FilesExplorer() {
   // The move or copy whose destination is being picked, and a count of the copies started, to read them again
   const [picking, setPicking] = useState<PickerRequest | null>(null);
   const [copiesStarted, setCopiesStarted] = useState(0);
-  // Another folder starts without the last one's filter or new folder
+  // The names checked in this folder, and what an action on them could not do
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [failures, setFailures] = useState<Failure[]>([]);
+  // Another folder starts without the last one's filter, new folder or selection
   const [openPath, setOpenPath] = useState(path);
   if (openPath !== path) {
     setOpenPath(path);
     setFilter("");
     setCreating(false);
+    setSelected(new Set());
+    setFailures([]);
   }
 
   const load = useCallback(async (signal?: { aborted: boolean }) => {
@@ -81,6 +88,56 @@ export function FilesExplorer() {
   const needle = filter.trim().toLocaleLowerCase();
   const entries = shown?.entries.filter((entry) => entry.name.toLocaleLowerCase().includes(needle)) ?? [];
   const used = shown ? shown.disk.total - shown.disk.free : 0;
+  // What is checked and still in the folder, after a reload
+  const chosen = shown?.entries.filter((entry) => selected.has(entry.name)) ?? [];
+
+  function toggle(name: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (!next.delete(name)) next.add(name);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    const all = entries.every((entry) => selected.has(entry.name));
+    setSelected((current) => {
+      const next = new Set(current);
+      for (const entry of entries) {
+        if (all) next.delete(entry.name);
+        else next.add(entry.name);
+      }
+      return next;
+    });
+  }
+
+  function pick(mode: PickerRequest["mode"], picked: FileEntry[]) {
+    setFailures([]);
+    setPicking({ mode, items: picked.map((entry) => ({ entry, path: join(path, entry.name) })) });
+  }
+
+  function finished(result: PickerResult) {
+    setPicking(null);
+    setFailures(result.failures);
+    // What could not go stays checked, to try again
+    setSelected(new Set(result.failures.map((failure) => failure.name)));
+    if (result.copies > 0) setCopiesStarted((count) => count + 1);
+    if (result.moved > 0) reload();
+  }
+
+  async function removeChosen() {
+    const failed: Failure[] = [];
+    for (const entry of chosen) {
+      try {
+        await callFiles("/delete", { path: join(path, entry.name) }, "POST");
+      } catch (err) {
+        failed.push({ name: entry.name, reason: message(err) });
+      }
+    }
+    setFailures(failed);
+    setSelected(new Set(failed.map((failure) => failure.name)));
+    reload();
+  }
 
   return (
     <Panel
@@ -165,6 +222,14 @@ export function FilesExplorer() {
         <Transfers started={copiesStarted} onFinished={reload} />
 
         {error && <Callout tone="red">{error}</Callout>}
+        {failures.length > 0 && (
+          <Callout tone="red">
+            <span className="whitespace-pre-line">
+              {failures.length === 1 ? "1 item" : `${failures.length} items`} could not be done:{"\n"}
+              {failures.map((failure) => `${failure.name}: ${failure.reason}`).join("\n")}
+            </span>
+          </Callout>
+        )}
         {!shown && !error && (
           <p className="flex items-center gap-2 text-sm text-muted">
             <Spinner className="h-3.5 w-3.5 text-violet-500" /> Loading…
@@ -186,42 +251,191 @@ export function FilesExplorer() {
           <PanelEmpty height={120}>Nothing here is called “{filter.trim()}”.</PanelEmpty>
         )}
         {entries.length > 0 && (
+          <SelectionBar
+            folder={path}
+            visible={entries}
+            chosen={chosen}
+            selected={selected}
+            onToggleAll={toggleAll}
+            onClear={() => setSelected(new Set())}
+            onPick={(mode) => pick(mode, chosen)}
+            onDelete={removeChosen}
+          />
+        )}
+        {entries.length > 0 && (
           <ul className="flex flex-col gap-1.5">
             {entries.map((entry) => (
               <EntryRow
                 key={entry.name}
                 folder={path}
                 entry={entry}
+                checked={selected.has(entry.name)}
+                onToggle={() => toggle(entry.name)}
                 onOpen={open}
                 onChanged={reload}
-                onPick={(mode) => setPicking({ mode, entry, path: join(path, entry.name) })}
+                onPick={(mode) => pick(mode, [entry])}
               />
             ))}
           </ul>
         )}
       </div>
-      <FolderPicker
-        request={picking}
-        onClose={() => setPicking(null)}
-        onDone={(copy) => {
-          setPicking(null);
-          if (copy) setCopiesStarted((count) => count + 1);
-          else reload();
-        }}
-      />
+      <FolderPicker request={picking} onClose={() => setPicking(null)} onDone={finished} />
     </Panel>
+  );
+}
+
+/** Checks all the folder's items, or none, and acts on the ones checked from its "⋯" menu. */
+function SelectionBar({
+  folder,
+  visible,
+  chosen,
+  selected,
+  onToggleAll,
+  onClear,
+  onPick,
+  onDelete,
+}: {
+  folder: string;
+  /** The items on screen, which "all" checks. */
+  visible: FileEntry[];
+  chosen: FileEntry[];
+  selected: Set<string>;
+  onToggleAll: () => void;
+  onClear: () => void;
+  onPick: (mode: PickerRequest["mode"]) => void;
+  onDelete: () => Promise<void>;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const all = visible.every((entry) => selected.has(entry.name));
+  const some = !all && visible.some((entry) => selected.has(entry.name));
+  const appFolder = chosen.some((entry) => entry.protected);
+  const bytes = chosen.reduce((total, entry) => total + (entry.size ?? 0), 0);
+  const folders = chosen.filter((entry) => entry.kind === "folder").length;
+  const count = chosen.length === 1 ? "1 item" : `${chosen.length} items`;
+
+  // Nothing checked is nothing to confirm
+  if (confirming && chosen.length === 0) setConfirming(false);
+
+  async function remove() {
+    setBusy(true);
+    await onDelete();
+    setBusy(false);
+    setConfirming(false);
+  }
+
+  return (
+    <div className="flex min-h-9 flex-wrap items-center gap-x-3 gap-y-2 px-3 sm:px-4">
+      <Checkbox
+        checked={all}
+        indeterminate={some}
+        onChange={onToggleAll}
+        label={all ? "Uncheck everything" : "Check everything"}
+      />
+      {chosen.length === 0 ? (
+        <span className="text-xs text-muted">Select all</span>
+      ) : (
+        <span className="min-w-0 flex-1 truncate text-xs text-muted tabular-nums">
+          <span className="font-medium text-foreground">{count} selected</span>
+          {bytes > 0 && ` · ${formatBytes(bytes)}`}
+          {folders > 0 && ` · ${folders === 1 ? "1 folder" : `${folders} folders`}`}
+        </span>
+      )}
+      {chosen.length > 0 && (
+        <div className="ml-auto flex items-center gap-1.5">
+          {confirming ? (
+            <>
+              <span className="text-xs text-muted">Delete {count}? It cannot be undone.</span>
+              <button type="button" onClick={remove} disabled={busy} className={`${BUTTON} ${BUTTON_TONES.red}`}>
+                {busy && <Spinner className="h-3 w-3" />}
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                disabled={busy}
+                className={`${BUTTON} ${BUTTON_TONES.neutral}`}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={onClear} className={`${BUTTON} ${BUTTON_TONES.neutral}`}>
+                Clear
+              </button>
+              <ActionsMenu
+                label={`Actions for the ${count} selected`}
+                actions={[
+                  {
+                    label: chosen.length === 1 && chosen[0].kind === "file" ? "Download" : "Download as zip",
+                    href: downloadHref(chosen.map((entry) => join(folder, entry.name))),
+                  },
+                  { label: "Copy to…", onSelect: () => onPick("copy") },
+                  {
+                    label: "Move to…",
+                    onSelect: () => onPick("move"),
+                    disabled: appFolder,
+                    hint: "An app's folder is selected; it cannot be moved",
+                  },
+                  {
+                    label: "Delete",
+                    tone: "red",
+                    onSelect: () => setConfirming(true),
+                    disabled: appFolder,
+                    hint: "An app's folder is selected; it cannot be deleted",
+                  },
+                ]}
+              />
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Checkbox({
+  checked,
+  indeterminate = false,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: () => void;
+  label: string;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (input.current) input.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+  return (
+    <input
+      ref={input}
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      aria-label={label}
+      title={label}
+      className="h-4 w-4 shrink-0 cursor-pointer accent-violet-500"
+    />
   );
 }
 
 function EntryRow({
   folder,
   entry,
+  checked,
+  onToggle,
   onOpen,
   onChanged,
   onPick,
 }: {
   folder: string;
   entry: FileEntry;
+  checked: boolean;
+  onToggle: () => void;
   onOpen: (path: string) => void;
   onChanged: () => void;
   /** Opens the folder picker to move or copy it somewhere else on the disk. */
@@ -232,17 +446,8 @@ function EntryRow({
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const confirmTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  useEffect(() => () => clearTimeout(confirmTimer.current), []);
 
   async function remove() {
-    if (!confirming) {
-      setConfirming(true);
-      confirmTimer.current = setTimeout(() => setConfirming(false), CONFIRM_MS);
-      return;
-    }
-    clearTimeout(confirmTimer.current);
     setBusy(true);
     setError(null);
     try {
@@ -279,10 +484,16 @@ function EntryRow({
     modifiedFormat.format(new Date(entry.modified * 1000)),
     entry.link ? "link" : null,
   ].filter(Boolean);
+  const appFolder = "It is used by an app on the server";
 
   return (
-    <li className={`glass flex flex-col gap-2 rounded-2xl px-3 py-2.5 sm:px-4 ${busy ? "opacity-60" : ""}`}>
+    <li
+      className={`glass flex flex-col gap-2 rounded-2xl px-3 py-2.5 transition sm:px-4 ${busy ? "opacity-60" : ""} ${
+        checked ? "ring-1 ring-violet-500/50 ring-inset" : ""
+      }`}
+    >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Checkbox checked={checked} onChange={onToggle} label={`Select ${entry.name}`} />
         <span
           className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
             isFolder ? "bg-violet-500/12 text-violet-600 dark:text-violet-300" : "bg-surface text-muted"
@@ -312,39 +523,41 @@ function EntryRow({
             {entry.protected && " · used by an app"}
           </span>
         </span>
-        {!renaming && (
-          <div className="ml-auto flex max-w-full min-w-0 flex-wrap items-center justify-end gap-1.5">
-            <a
-              href={`/api/files/download?${new URLSearchParams({ path })}`}
-              download
-              title={isFolder ? "Download it as a zip" : "Download"}
-              className={`${BUTTON} ${BUTTON_TONES.violet}`}
-            >
-              <DownloadIcon className="h-3.5 w-3.5" />
-              {isFolder ? "Zip" : "Download"}
-            </a>
-            <button type="button" onClick={() => onPick("copy")} disabled={busy} className={`${BUTTON} ${BUTTON_TONES.neutral}`}>
-              Copy
+        {!renaming && confirming && (
+          <div className="ml-auto flex items-center gap-1.5">
+            <button type="button" onClick={remove} disabled={busy} className={`${BUTTON} ${BUTTON_TONES.red}`}>
+              {busy && <Spinner className="h-3 w-3" />}
+              {isFolder ? "Delete all inside" : "Delete"}
             </button>
-            {!entry.protected && (
-              <>
-                <button type="button" onClick={() => onPick("move")} disabled={busy} className={`${BUTTON} ${BUTTON_TONES.neutral}`}>
-                  Move
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRenaming(true)}
-                  disabled={busy}
-                  className={`${BUTTON} ${BUTTON_TONES.neutral}`}
-                >
-                  Rename
-                </button>
-                <button type="button" onClick={remove} disabled={busy} className={`${BUTTON} ${BUTTON_TONES.red}`}>
-                  {busy && confirming ? <Spinner className="h-3 w-3" /> : null}
-                  {confirming ? (isFolder ? "Delete all inside?" : "Press again") : "Delete"}
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              disabled={busy}
+              className={`${BUTTON} ${BUTTON_TONES.neutral}`}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+        {!renaming && !confirming && (
+          <div className="ml-auto">
+            <ActionsMenu
+              label={`Actions for ${entry.name}`}
+              disabled={busy}
+              actions={[
+                { label: isFolder ? "Download as zip" : "Download", href: downloadHref([path]) },
+                { label: "Copy to…", onSelect: () => onPick("copy") },
+                { label: "Move to…", onSelect: () => onPick("move"), disabled: entry.protected, hint: appFolder },
+                { label: "Rename", onSelect: () => setRenaming(true), disabled: entry.protected, hint: appFolder },
+                {
+                  label: "Delete",
+                  tone: "red",
+                  onSelect: () => setConfirming(true),
+                  disabled: entry.protected,
+                  hint: appFolder,
+                },
+              ]}
+            />
           </div>
         )}
       </div>

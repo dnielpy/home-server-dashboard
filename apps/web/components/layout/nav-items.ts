@@ -84,7 +84,6 @@ export const NAV_ITEMS: NavEntry[] = [
       { href: "/network/devices", label: "Devices", Icon: DevicesIcon, matchPrefix: true },
     ],
   },
-  { href: "/files", label: "Files", Icon: FolderIcon },
   {
     label: "Settings",
     Icon: WrenchIcon,
@@ -99,6 +98,7 @@ export const NAV_ITEMS: NavEntry[] = [
     Icon: ToolboxIcon,
     children: [
       { href: "/tools/sender", label: "Sender", Icon: SendIcon },
+      { href: "/tools/files", label: "Files", Icon: FolderIcon },
     ],
   },
 ];

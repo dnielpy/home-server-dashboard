@@ -62,9 +62,9 @@ async def cancel_transfer(upstream: Upstream, transfer_id: str) -> FileTransferO
     return FileTransferOut.model_validate(body)
 
 
-async def open_download(upstream: Upstream, path: str) -> httpx.Response:
+async def open_download(upstream: Upstream, paths: list[str]) -> httpx.Response:
     """The agent's answer to a download, still streaming; the caller closes it."""
-    request = upstream.http.build_request("GET", "/files/download", params={"path": path}, timeout=DOWNLOAD_TIMEOUT)
+    request = upstream.http.build_request("GET", "/files/download", params={"path": paths}, timeout=DOWNLOAD_TIMEOUT)
     try:
         response = await upstream.http.send(request, stream=True)
     except httpx.HTTPError as err:

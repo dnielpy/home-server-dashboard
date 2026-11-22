@@ -773,7 +773,8 @@ def _files(query):
 
 @route("GET", "/files/download")
 def _files_download(query):
-    return on_disk(lambda disk: disk.download(param(query, "path")))
+    # Several ?path= go in one zip
+    return on_disk(lambda disk: disk.download_many(query.get("path", [""])))
 
 
 @route("POST", "/files/rename")

@@ -8,12 +8,12 @@ import { PanelSkeleton } from "@/components/ui/panel";
 import { Reveal } from "@/components/ui/reveal";
 
 export const metadata: Metadata = {
-  title: "Files · Home Server",
+  title: "Files · Tools · Home Server",
 };
 
 export default function Files() {
   return (
-    <Page section="External disk" title="Files" Icon={FolderIcon}>
+    <Page section="Tools" title="Files" Icon={FolderIcon}>
       <Reveal index={1}>
         {/* The folder open is in the URL, which the explorer reads in the browser */}
         <Suspense fallback={<PanelSkeleton height={420} />}>

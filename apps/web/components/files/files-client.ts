@@ -37,5 +37,10 @@ export function join(folder: string, name: string): string {
 }
 
 export function folderHref(path: string): string {
-  return path ? `/files?${new URLSearchParams({ path })}` : "/files";
+  return path ? `/tools/files?${new URLSearchParams({ path })}` : "/tools/files";
+}
+
+/** Downloads a file, or a folder as a zip; several paths of one folder come in one zip. */
+export function downloadHref(paths: string[]): string {
+  return `/api/files/download?${new URLSearchParams(paths.map((path) => ["path", path]))}`;
 }

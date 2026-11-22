@@ -114,6 +114,20 @@ def test_downloads_a_file_as_it_is_and_a_folder_as_a_zip(disk: files.Disk) -> No
     assert error(lambda: disk.download("")).status == 403
 
 
+def test_downloads_several_entries_of_a_folder_in_one_zip(disk: files.Disk) -> None:
+    download = disk.download_many(["notes/a.txt", "notes/inner", "notes/a.txt"])
+    assert download.name == "notes.zip"
+    out = io.BytesIO()
+    download.write(out)
+    with zipfile.ZipFile(io.BytesIO(out.getvalue())) as archive:
+        assert sorted(archive.namelist()) == ["a.txt", "inner/b.txt"]
+    assert disk.download_many(["notes/a.txt"]).size == 5
+    assert disk.download_many(["notes", "Zebra.txt"]).name == "External disk.zip"
+    assert error(lambda: disk.download_many(["notes/a.txt", "Zebra.txt"])).status == 400
+    assert error(lambda: disk.download_many(["notes/a.txt", "notes/missing"])).status == 404
+    assert error(lambda: disk.download_many([])).status == 400
+
+
 def test_content_disposition_keeps_non_ascii_names() -> None:
     headers = files.Download(Path("x"), "canción ñ.mp4", 1, "application/octet-stream").headers()
     assert 'filename="cancion n.mp4"' in headers["Content-Disposition"]

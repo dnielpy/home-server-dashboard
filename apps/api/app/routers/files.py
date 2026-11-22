@@ -21,6 +21,8 @@ router = APIRouter(
 FilePath = Annotated[str, Query(max_length=4096, description="Relative to the external disk")]
 Name = Annotated[str, Query(min_length=1, max_length=255)]
 Destination = Annotated[str, Query(max_length=4096, description="The folder it goes into, relative to the disk")]
+# Several go in one zip; they have to be in the same folder
+FilePaths = Annotated[list[str], Query(min_length=1, max_length=1000, description="Relative to the external disk")]
 TransferId = Annotated[str, Path(pattern=r"^[0-9a-f]{32}$")]
 NOT_FOUND = {404: {"description": "There is no such file or folder"}}
 FORBIDDEN = {403: {"description": "It is outside the disk, an app's folder, or the server's user cannot change it"}}
@@ -43,9 +45,12 @@ async def folder(upstreams: UpstreamsDep, path: FilePath = "") -> FolderOut:
     "/download",
     responses={**NOT_FOUND, **FORBIDDEN, 200: {"content": {"application/octet-stream": {}, "application/zip": {}}}},
     response_class=StreamingResponse,
-    description="Downloads a file as it is, or a folder as a zip made while it downloads.",
+    description=(
+        "Downloads a file as it is, or a folder as a zip made while it downloads. Several paths of one folder "
+        "download together in one zip."
+    ),
 )
-async def download(upstreams: UpstreamsDep, path: FilePath) -> StreamingResponse:
+async def download(upstreams: UpstreamsDep, path: FilePaths) -> StreamingResponse:
     response = await files.open_download(upstreams.agent, path)
     return StreamingResponse(
         response.aiter_raw(),

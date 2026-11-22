@@ -63,6 +63,20 @@ def test_streams_a_download_with_its_headers(client, upstreams) -> None:
     assert response.headers["content-disposition"] == disposition
 
 
+def test_downloads_several_paths_in_one_zip(client, upstreams) -> None:
+    calls = upstreams(
+        agent={
+            "/files/download": httpx.Response(
+                200, stream=httpx.ByteStream(b"zip"), headers={"Content-Type": "application/zip"}
+            )
+        }
+    )
+    response = client.get("/files/download", params=[("path", "notes/a.txt"), ("path", "notes/b.txt")])
+    assert response.status_code == 200
+    assert response.content == b"zip"
+    assert calls[0].url.params.get_list("path") == ["notes/a.txt", "notes/b.txt"]
+
+
 def test_download_refused(client, upstreams) -> None:
     upstreams(agent={"/files/download": (404, {"detail": "There is no such file"})})
     response = client.get("/files/download", params={"path": "missing"})

@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 
 import { proxy } from "@/lib/api";
 
-// The Files page runs in the browser, which cannot reach the API; downloads stream through here
+// The Files page runs in the browser, which cannot reach the API. Downloads skip this: proxy.ts rewrites them to the API
 async function handle(request: NextRequest, ctx: RouteContext<"/api/files/[[...path]]">) {
   const { path = [] } = await ctx.params;
   if (path.some((segment) => segment === "." || segment === "..")) {

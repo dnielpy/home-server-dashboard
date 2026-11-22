@@ -4,34 +4,53 @@ import { useEffect, useRef, useState } from "react";
 
 import { FolderIcon } from "@/components/icons/folder-icon";
 import { Callout, Spinner } from "@/components/management/parts";
-import type { FileEntry, FileTransfer, Folder } from "@/lib/api";
+import type { FileEntry, Folder } from "@/lib/api";
 
 import { BUTTON, BUTTON_TONES, callFiles, INPUT, join, message } from "./files-client";
 
+export type PickerItem = {
+  entry: FileEntry;
+  /** Relative to the disk. */
+  path: string;
+};
+
 export type PickerRequest = {
   mode: "move" | "copy";
-  /** What is moved or copied, relative to the disk. */
-  entry: FileEntry;
-  path: string;
+  /** What is moved or copied, all from one folder. */
+  items: PickerItem[];
+};
+
+/** How a move or copy of several went: the copies started, and what could not go, with why. */
+export type PickerResult = {
+  moved: number;
+  copies: number;
+  failures: { name: string; reason: string }[];
 };
 
 function parentOf(path: string): string {
   return path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
 }
 
+function isPicked(request: PickerRequest, path: string): boolean {
+  return request.items.some((item) => item.entry.kind === "folder" && item.path === path);
+}
+
 /** Why the copy or move cannot go into `folder`, or null when it can. */
 function refusal(request: PickerRequest, folder: string): string | null {
-  const isFolder = request.entry.kind === "folder";
-  if (isFolder && (folder === request.path || folder.startsWith(`${request.path}/`))) {
-    return "A folder cannot go inside itself";
+  const inside = request.items.some(
+    (item) => item.entry.kind === "folder" && (folder === item.path || folder.startsWith(`${item.path}/`)),
+  );
+  if (inside) return "A folder cannot go inside itself";
+  if (request.mode === "move" && folder === parentOf(request.items[0].path)) {
+    return request.items.length === 1 ? "It is already in this folder" : "They are already in this folder";
   }
-  if (request.mode === "move" && folder === parentOf(request.path)) return "It is already in this folder";
   return null;
 }
 
 /**
- * A modal to browse the disk's folders and pick where a file or folder is moved or copied to. A move ends here; a
- * copy only starts, and `onDone` gets the copy that runs in the background.
+ * A modal to browse the disk's folders and pick where files and folders are moved or copied to. A move ends here; a
+ * copy only starts, and runs in the background. When nothing could go, it stays open with why; otherwise `onDone`
+ * says how it went.
  */
 export function FolderPicker({
   request,
@@ -40,7 +59,7 @@ export function FolderPicker({
 }: {
   request: PickerRequest | null;
   onClose: () => void;
-  onDone: (copy: FileTransfer | null) => void;
+  onDone: (result: PickerResult) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [browsing, setBrowsing] = useState("");
@@ -54,7 +73,7 @@ export function FolderPicker({
   if (opened !== request) {
     setOpened(request);
     if (request) {
-      setBrowsing(parentOf(request.path));
+      setBrowsing(parentOf(request.items[0].path));
       setFolder(null);
       setError(null);
       setBusy(false);
@@ -96,22 +115,33 @@ export function FolderPicker({
   const parts = browsing ? browsing.split("/") : [];
   const blocked = refusal(request, browsing);
   const verb = request.mode === "move" ? "Move" : "Copy";
+  const what = request.items.length === 1 ? `“${request.items[0].entry.name}”` : `${request.items.length} items`;
 
   async function confirm() {
     if (!request || blocked) return;
     setBusy(true);
     setError(null);
-    try {
-      if (request.mode === "move") {
-        await callFiles("/move", { path: request.path, to: browsing }, "POST");
-        onDone(null);
-      } else {
-        onDone(await callFiles<FileTransfer>("/copy", { path: request.path, to: browsing }, "POST"));
+    const result: PickerResult = { moved: 0, copies: 0, failures: [] };
+    // One at a time, so a full disk or a name taken stops only that one
+    for (const item of request.items) {
+      try {
+        await callFiles(`/${request.mode}`, { path: item.path, to: browsing }, "POST");
+        if (request.mode === "move") result.moved += 1;
+        else result.copies += 1;
+      } catch (err) {
+        result.failures.push({ name: item.entry.name, reason: message(err) });
       }
-    } catch (err) {
-      setError(message(err));
-      setBusy(false);
     }
+    if (result.moved + result.copies > 0) {
+      onDone(result);
+      return;
+    }
+    setError(
+      result.failures.length === 1
+        ? result.failures[0].reason
+        : result.failures.map((failure) => `${failure.name}: ${failure.reason}`).join("\n"),
+    );
+    setBusy(false);
   }
 
   async function createFolder() {
@@ -145,7 +175,7 @@ export function FolderPicker({
       <div className="flex max-h-[80vh] flex-col gap-4 p-6">
         <div>
           <h2 id="picker-title" className="font-semibold tracking-tight">
-            {verb} “{request.entry.name}”
+            {verb} {what}
           </h2>
           <p className="text-sm text-muted">Open the folder it goes into, then press {verb} here.</p>
         </div>
@@ -215,7 +245,7 @@ export function FolderPicker({
             )}
             {folders.map((entry) => {
               const path = join(browsing, entry.name);
-              const itself = request.entry.kind === "folder" && path === request.path;
+              const itself = isPicked(request, path);
               return (
                 <li key={entry.name}>
                   <button
@@ -234,7 +264,11 @@ export function FolderPicker({
           </ul>
         </div>
 
-        {error && <Callout tone="red">{error}</Callout>}
+        {error && (
+          <Callout tone="red">
+            <span className="whitespace-pre-line">{error}</span>
+          </Callout>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <button

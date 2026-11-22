@@ -45,6 +45,8 @@ class Download:
     name: str
     size: int | None
     content_type: str
+    # The other files and folders of the same folder that go in the zip next to `path`
+    others: tuple[Path, ...] = ()
 
     def headers(self) -> dict[str, str]:
         ascii_name = unicodedata.normalize("NFKD", self.name).encode("ascii", "ignore").decode().replace('"', "'")
@@ -66,17 +68,26 @@ class Download:
             return
         # Stored, not compressed: the disk is mostly videos and photos, which do not get smaller
         with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED, allowZip64=True) as archive:
-            for folder, dirs, names in os.walk(self.path):
-                dirs.sort()
-                for name in sorted(names):
-                    file = Path(folder, name)
-                    if file.is_symlink() or not file.is_file():
-                        continue
+            for item in (self.path, *self.others):
+                if item.is_symlink():
+                    continue
+                files = [item] if item.is_file() else walk_files(item)
+                for file in files:
                     try:
-                        archive.write(file, str(file.relative_to(self.path.parent)))
+                        archive.write(file, str(file.relative_to(item.parent)))
                     except OSError:
                         # A file it cannot read is left out rather than ending the download halfway
                         continue
+
+
+def walk_files(folder: Path):
+    """The files inside a folder, in order, leaving out links."""
+    for parent, dirs, names in os.walk(folder):
+        dirs.sort()
+        for name in sorted(names):
+            file = Path(parent, name)
+            if not file.is_symlink() and file.is_file():
+                yield file
 
 
 class Disk:
@@ -166,6 +177,26 @@ class Disk:
         except PermissionError:
             raise FilesError(403, "The server's user cannot read this file")
         return Download(path, path.name, size, "application/octet-stream")
+
+    def download_many(self, relatives: list[str]) -> Download:
+        """Several files and folders of one folder in one zip, named after that folder."""
+        unique = list(dict.fromkeys(relatives))
+        if len(unique) == 1:
+            return self.download(unique[0])
+        if not unique:
+            raise FilesError(400, "Nothing to download")
+        root = self._root()
+        paths = [self.resolve(relative) for relative in unique]
+        if any(path == root for path in paths):
+            raise FilesError(403, "The whole disk cannot be downloaded at once")
+        if len({path.parent for path in paths}) > 1:
+            raise FilesError(400, "What is downloaded together has to be in the same folder")
+        missing = next((path for path in paths if not path.exists()), None)
+        if missing is not None:
+            raise FilesError(404, f"There is no {missing.name}")
+        parent = paths[0].parent
+        name = f"{parent.name if parent != root else 'External disk'}.zip"
+        return Download(paths[0], name, None, "application/zip", tuple(paths[1:]))
 
     def rename(self, relative: str, name: str) -> dict[str, Any]:
         path = self.resolve(relative)
