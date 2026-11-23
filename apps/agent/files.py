@@ -26,6 +26,8 @@ from urllib.parse import quote
 HIDDEN = frozenset({"lost+found", "docker", "containerd"})
 # Top-level folders the apps write to: LocalTube's videos, Sender, the downloaders, LGallery and Astro
 PROTECTED = frozenset({"videos", "sender", "downloads", "gallery", "openclaw"})
+# LGallery's folder, which "Move to gallery" empties folders into
+GALLERY = "gallery"
 MAX_NAME_BYTES = 255
 CHUNK_BYTES = 1024 * 1024
 
@@ -262,6 +264,31 @@ class Disk:
             raise FilesError(409, f"It could not be moved: {err.strerror or err}")
         return {"path": self._relative(target)}
 
+    def to_gallery(self, relative: str) -> dict[str, Any]:
+        """Moves a file into LGallery's top folder, or what a folder has, emptying the folder and then deleting it:
+        the downloaders leave every file in a folder of its own. A name already taken there gets " (2)"."""
+        path = self.resolve(relative)
+        self._guard(path, "moved")
+        if not path.exists() and not path.is_symlink():
+            raise FilesError(404, "There is no such file or folder")
+        gallery = self._root() / GALLERY
+        if not gallery.is_dir():
+            raise FilesError(404, f"There is no {GALLERY} folder on the disk")
+        is_folder = path.is_dir() and not path.is_symlink()
+        if not is_folder and path.parent == gallery:
+            raise FilesError(409, "It is already in the gallery")
+        try:
+            items = sorted(path.iterdir()) if is_folder else [path]
+            for item in items:
+                item.rename(numbered_name(gallery / item.name))
+            if is_folder:
+                path.rmdir()
+        except PermissionError:
+            raise FilesError(403, "The server's user cannot move it, or cannot write in the gallery")
+        except OSError as err:
+            raise FilesError(409, f"It could not be moved: {err.strerror or err}")
+        return {"path": GALLERY}
+
     def copy_plan(self, relative: str, relative_folder: str) -> tuple[Path, Path, int]:
         """Checks a copy before it starts: the source, the free name it gets in the folder, and its size in bytes."""
         path = self.resolve(relative)
@@ -301,6 +328,18 @@ def free_name(target: Path) -> Path:
         if not candidate.exists() and not candidate.is_symlink():
             return candidate
     raise FilesError(409, f"There are too many copies of {target.name} there")
+
+
+def numbered_name(target: Path) -> Path:
+    """`target`, or "name (2).ext", "name (3).ext"… when something already has that name."""
+    if not target.exists() and not target.is_symlink():
+        return target
+    stem, suffix = (target.stem, target.suffix) if target.is_file() else (target.name, "")
+    for number in range(2, 1000):
+        candidate = target.with_name(f"{stem} ({number}){suffix}")
+        if not candidate.exists() and not candidate.is_symlink():
+            return candidate
+    raise FilesError(409, f"There are too many called {target.name} there")
 
 
 def tree_size(path: Path) -> int:

@@ -274,3 +274,34 @@ def test_agent_moves_and_copies(disk: files.Disk, monkeypatch: pytest.MonkeyPatc
         assert caught.value.code == 409
     finally:
         server.shutdown()
+
+
+def test_moves_files_and_what_folders_have_into_the_gallery(disk: files.Disk) -> None:
+    gallery = disk.root / "gallery"
+    gallery.mkdir()
+    (gallery / "a.txt").write_text("taken")
+    (disk.root / "album").mkdir()
+    (disk.root / "album" / "photo.jpg").write_bytes(b"jpg")
+    assert disk.to_gallery("notes") == {"path": "gallery"}
+    assert not (disk.root / "notes").exists()
+    assert (gallery / "a (2).txt").read_text() == "hello"
+    assert (gallery / "inner" / "b.txt").read_text() == "world"
+    assert disk.to_gallery("Zebra.txt") == {"path": "gallery"}
+    assert (gallery / "Zebra.txt").read_text() == "z"
+    assert disk.to_gallery("album/photo.jpg") == {"path": "gallery"}
+    assert (disk.root / "album").is_dir()
+    # A folder already in the gallery is emptied into its top as well
+    assert disk.to_gallery("gallery/inner") == {"path": "gallery"}
+    assert (gallery / "b.txt").read_text() == "world"
+    assert not (gallery / "inner").exists()
+
+
+def test_to_gallery_refuses_the_apps_folders_and_what_is_already_there(disk: files.Disk) -> None:
+    assert error(lambda: disk.to_gallery("notes")).status == 404
+    (disk.root / "gallery").mkdir()
+    (disk.root / "gallery" / "x.jpg").write_bytes(b"x")
+    assert error(lambda: disk.to_gallery("gallery/x.jpg")).status == 409
+    assert error(lambda: disk.to_gallery("gallery")).status == 403
+    assert error(lambda: disk.to_gallery("videos")).status == 403
+    assert error(lambda: disk.to_gallery("")).status == 403
+    assert error(lambda: disk.to_gallery("missing")).status == 404

@@ -105,6 +105,19 @@ async def move(upstreams: UpstreamsDep, path: FilePath, to: Destination) -> File
 
 
 @router.post(
+    "/to-gallery",
+    response_model=FilePathOut,
+    responses={**NOT_FOUND, **FORBIDDEN, 409: {"description": "The file is already in the gallery"}},
+    description=(
+        "Moves a file into the top of LGallery's folder, or everything a folder has, deleting the folder once it is "
+        'empty. A name already taken there gets " (2)".'
+    ),
+)
+async def to_gallery(upstreams: UpstreamsDep, path: FilePath) -> FilePathOut:
+    return await files.to_gallery(upstreams.agent, path)
+
+
+@router.post(
     "/copy",
     response_model=FileTransferOut,
     responses={

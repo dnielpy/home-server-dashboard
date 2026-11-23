@@ -101,6 +101,7 @@ def test_moves_and_copies(client, upstreams) -> None:
     calls = upstreams(
         agent={
             "/files/move": {"path": "archive/a.txt"},
+            "/files/to-gallery": {"path": "gallery"},
             "/files/copy": TRANSFER,
             "/files/transfers": [TRANSFER],
             f"/files/transfers/{'a' * 32}/cancel": TRANSFER,
@@ -114,6 +115,7 @@ def test_moves_and_copies(client, upstreams) -> None:
     assert client.post(f"/files/transfers/{'a' * 32}/cancel").json() == TRANSFER
     assert client.post("/files/transfers/nope/cancel").status_code == 422
     assert client.post("/files/move", params={"path": "a"}).status_code == 422
+    assert client.post("/files/to-gallery", params={"path": "album"}).json() == {"path": "gallery"}
 
 
 def test_move_and_copy_refusals_pass_through(client, upstreams) -> None:

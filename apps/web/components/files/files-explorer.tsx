@@ -23,7 +23,7 @@ type Failure = PickerResult["failures"][number];
 const modifiedFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
 /**
- * A file manager for the external disk: open folders, download, rename, move, copy and delete what is in them, one at
+ * A file manager for the external disk: open folders, download, rename, move, copy and delete what is in them, or move it to the gallery, one at
  * a time or several selected together.
  */
 export function FilesExplorer() {
@@ -125,11 +125,12 @@ export function FilesExplorer() {
     if (result.moved > 0) reload();
   }
 
-  async function removeChosen() {
+  /** Deletes, or moves to the gallery, each one checked, one after the other. */
+  async function eachChosen(action: "/delete" | "/to-gallery") {
     const failed: Failure[] = [];
     for (const entry of chosen) {
       try {
-        await callFiles("/delete", { path: join(path, entry.name) }, "POST");
+        await callFiles(action, { path: join(path, entry.name) }, "POST");
       } catch (err) {
         failed.push({ name: entry.name, reason: message(err) });
       }
@@ -259,7 +260,8 @@ export function FilesExplorer() {
             onToggleAll={toggleAll}
             onClear={() => setSelected(new Set())}
             onPick={(mode) => pick(mode, chosen)}
-            onDelete={removeChosen}
+            onDelete={() => eachChosen("/delete")}
+            onGallery={() => eachChosen("/to-gallery")}
           />
         )}
         {entries.length > 0 && (
@@ -294,6 +296,7 @@ function SelectionBar({
   onClear,
   onPick,
   onDelete,
+  onGallery,
 }: {
   folder: string;
   /** The items on screen, which "all" checks. */
@@ -304,6 +307,8 @@ function SelectionBar({
   onClear: () => void;
   onPick: (mode: PickerRequest["mode"]) => void;
   onDelete: () => Promise<void>;
+  /** Moves the files, and what the folders have, into the gallery's top folder. */
+  onGallery: () => Promise<void>;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -322,6 +327,12 @@ function SelectionBar({
     await onDelete();
     setBusy(false);
     setConfirming(false);
+  }
+
+  async function toGallery() {
+    setBusy(true);
+    await onGallery();
+    setBusy(false);
   }
 
   return (
@@ -361,11 +372,13 @@ function SelectionBar({
             </>
           ) : (
             <>
-              <button type="button" onClick={onClear} className={`${BUTTON} ${BUTTON_TONES.neutral}`}>
+              {busy && <Spinner className="h-3.5 w-3.5 text-violet-500" />}
+              <button type="button" onClick={onClear} disabled={busy} className={`${BUTTON} ${BUTTON_TONES.neutral}`}>
                 Clear
               </button>
               <ActionsMenu
                 label={`Actions for the ${count} selected`}
+                disabled={busy}
                 actions={[
                   {
                     label: chosen.length === 1 && chosen[0].kind === "file" ? "Download" : "Download as zip",
@@ -375,6 +388,12 @@ function SelectionBar({
                   {
                     label: "Move to…",
                     onSelect: () => onPick("move"),
+                    disabled: appFolder,
+                    hint: "An app's folder is selected; it cannot be moved",
+                  },
+                  {
+                    label: "Move to gallery",
+                    onSelect: toGallery,
                     disabled: appFolder,
                     hint: "An app's folder is selected; it cannot be moved",
                   },
@@ -457,6 +476,18 @@ function EntryRow({
       setError(message(err));
       setBusy(false);
       setConfirming(false);
+    }
+  }
+
+  async function toGallery() {
+    setBusy(true);
+    setError(null);
+    try {
+      await callFiles("/to-gallery", { path }, "POST");
+      onChanged();
+    } catch (err) {
+      setError(message(err));
+      setBusy(false);
     }
   }
 
@@ -548,6 +579,7 @@ function EntryRow({
                 { label: isFolder ? "Download as zip" : "Download", href: downloadHref([path]) },
                 { label: "Copy to…", onSelect: () => onPick("copy") },
                 { label: "Move to…", onSelect: () => onPick("move"), disabled: entry.protected, hint: appFolder },
+                { label: "Move to gallery", onSelect: toGallery, disabled: entry.protected, hint: appFolder },
                 { label: "Rename", onSelect: () => setRenaming(true), disabled: entry.protected, hint: appFolder },
                 {
                   label: "Delete",

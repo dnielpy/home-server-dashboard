@@ -797,6 +797,11 @@ def _files_move(query):
     return on_disk(lambda disk: disk.move(param(query, "path"), param(query, "to")))
 
 
+@route("POST", "/files/to-gallery")
+def _files_to_gallery(query):
+    return on_disk(lambda disk: disk.to_gallery(param(query, "path")))
+
+
 # The copies started from the dashboard, which run in the background
 TRANSFERS = files.Transfers()
 

@@ -47,6 +47,10 @@ async def move(upstream: Upstream, path: str, to: str) -> FilePathOut:
     return FilePathOut.model_validate(await _call(upstream, "POST", "/files/move", path=path, to=to))
 
 
+async def to_gallery(upstream: Upstream, path: str) -> FilePathOut:
+    return FilePathOut.model_validate(await _call(upstream, "POST", "/files/to-gallery", path=path))
+
+
 async def copy(upstream: Upstream, path: str, to: str) -> FileTransferOut:
     # Measuring a big folder before starting takes a moment; the copy itself runs in the background
     body = await _call(upstream, "POST", "/files/copy", timeout=DELETE_TIMEOUT_SECONDS, path=path, to=to)
