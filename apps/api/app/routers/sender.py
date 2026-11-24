@@ -28,6 +28,7 @@ from app.sender import (
     SenderDep,
     StoredFile,
     WrongPin,
+    download_name,
 )
 
 router = APIRouter(prefix="/sender", tags=["sender"])
@@ -101,7 +102,10 @@ async def create(sender: SenderDep) -> SenderDraftOut:
     status_code=status.HTTP_201_CREATED,
     response_model=SenderFileOut,
     responses={**NOT_FOUND, **DRAFT_ONLY, 507: {"description": "There is no room for the file on the disk"}},
-    description="Uploads a file to a package that has no PIN yet; the request body is the file as it is.",
+    description=(
+        "Uploads a file to a package that has no PIN yet; the request body is the file as it is. A name with "
+        "slashes keeps the folders the file came in."
+    ),
 )
 async def upload(
     package_id: PackageId,
@@ -250,7 +254,7 @@ async def download(
         sender.read_file(package_id, file_id, path),
         media_type="application/octet-stream",
         headers={
-            "Content-Disposition": _content_disposition(stored.name),
+            "Content-Disposition": _content_disposition(download_name(stored.name)),
             "Content-Length": str(stored.size),
             "Cache-Control": "no-store",
         },

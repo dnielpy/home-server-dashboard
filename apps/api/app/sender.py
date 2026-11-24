@@ -36,6 +36,8 @@ FREE_SPACE_MARGIN_BYTES = 100 * 1024 * 1024
 CHUNK_BYTES = 1024 * 1024
 PBKDF2_ITERATIONS = 200_000
 MAX_FILE_NAME = 200
+# Parts of a path kept in a file's name; the outer folders go first
+MAX_FOLDER_DEPTH = 8
 
 
 class PackageNotFound(Exception):
@@ -103,16 +105,27 @@ class Package:
         return [f for f in self.files if not f.downloaded]
 
 
+def _clean_part(part: str) -> str:
+    part = "".join(c for c in part if unicodedata.category(c)[0] != "C").strip()
+    if len(part) > MAX_FILE_NAME:
+        stem, dot, ext = part.rpartition(".")
+        part = f"{stem[: MAX_FILE_NAME - len(ext) - 1]}.{ext}" if dot and len(ext) < 20 else part[:MAX_FILE_NAME]
+    return part
+
+
 def clean_file_name(name: str) -> str:
-    """The name a file is offered with on download: only its last part, without control characters."""
-    name = name.replace("\\", "/").rsplit("/", 1)[-1]
-    name = "".join(c for c in name if unicodedata.category(c)[0] != "C").strip()
-    if name in ("", ".", ".."):
-        return "file"
-    if len(name) > MAX_FILE_NAME:
-        stem, dot, ext = name.rpartition(".")
-        name = f"{stem[: MAX_FILE_NAME - len(ext) - 1]}.{ext}" if dot and len(ext) < 20 else name[:MAX_FILE_NAME]
-    return name
+    """The name a file is listed with: its path inside the folder it was uploaded with, if any, as folder/file,
+    without control characters, empty parts, . or .., or a drive."""
+    parts = [_clean_part(part) for part in name.replace("\\", "/").split("/")]
+    parts = [part for part in parts if part not in ("", ".", "..")]
+    if parts and parts[0].endswith(":"):
+        parts = parts[1:]
+    return "/".join(parts[-MAX_FOLDER_DEPTH:]) or "file"
+
+
+def download_name(name: str) -> str:
+    """The name a file is offered with on download: browsers save it flat, so only its last part."""
+    return name.rsplit("/", 1)[-1]
 
 
 def _hash_pin(pin: str, salt: bytes) -> str:

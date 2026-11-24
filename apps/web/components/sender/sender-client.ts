@@ -46,16 +46,18 @@ export async function callSender<T>(
   return json as T;
 }
 
-/** Uploads a file to a package, reporting the bytes sent; fetch cannot follow an upload's progress, XHR can. */
+/** Uploads a file to a package under a name, which may have the folders it came in, reporting the bytes sent; fetch
+ * cannot follow an upload's progress, XHR can. */
 export function uploadFile(
   packageId: string,
   file: File,
+  name: string,
   onProgress: (loaded: number) => void,
   signal: AbortSignal,
 ): Promise<SenderFile> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    const query = new URLSearchParams({ name: file.name, size: String(file.size) });
+    const query = new URLSearchParams({ name, size: String(file.size) });
     xhr.open("POST", `/api/sender/packages/${packageId}/files?${query}`);
     xhr.setRequestHeader("Content-Type", "application/octet-stream");
     xhr.upload.onprogress = (event) => onProgress(event.loaded);

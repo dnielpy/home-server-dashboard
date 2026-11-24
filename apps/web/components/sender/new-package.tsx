@@ -13,6 +13,8 @@ import { formatBytes } from "@/lib/format";
 type Item = {
   key: string;
   file: File;
+  /** The file's path inside the folder it came in, or just its name. */
+  name: string;
   state: "queued" | "uploading" | "done" | "error";
   loaded: number;
   /** Its id on the server once uploaded. */
@@ -24,6 +26,39 @@ let nextKey = 0;
 
 function message(error: unknown): string {
   return error instanceof SenderRequestError ? error.message : "Something went wrong";
+}
+
+type Picked = { file: File; name: string };
+
+function readEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
+  return new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+}
+
+/** The files under a dropped entry, with their path from it; a folder is read whole, readEntries gives a batch per call. */
+async function walk(entry: FileSystemEntry): Promise<Picked[]> {
+  if (entry.isFile) {
+    const file = await new Promise<File>((resolve, reject) => (entry as FileSystemFileEntry).file(resolve, reject));
+    return [{ file, name: entry.fullPath.replace(/^\//, "") || file.name }];
+  }
+  if (!entry.isDirectory) return [];
+  const reader = (entry as FileSystemDirectoryEntry).createReader();
+  const picked: Picked[] = [];
+  for (let batch = await readEntries(reader); batch.length; batch = await readEntries(reader)) {
+    for (const child of batch) picked.push(...(await walk(child)));
+  }
+  return picked;
+}
+
+/** What was dropped, folders read through; entries have to be taken before the drop event ends. */
+async function dropped(data: DataTransfer): Promise<Picked[]> {
+  const entries = Array.from(data.items, (item) => (item.kind === "file" ? item.webkitGetAsEntry() : null));
+  if (!entries.some(Boolean)) return Array.from(data.files, (file) => ({ file, name: file.name }));
+  const picked = await Promise.all(entries.map((entry) => (entry ? walk(entry) : [])));
+  return picked.flat();
+}
+
+function chosen(files: FileList | null): Picked[] {
+  return Array.from(files ?? [], (file) => ({ file, name: file.webkitRelativePath || file.name }));
 }
 
 /** The page's New package button and its modal: drop files, they go up to the server one after the other, then a
@@ -38,6 +73,7 @@ export function NewPackage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
   // The package the files go to, made with the first file
   const draft = useRef<Promise<string> | null>(null);
   const uploads = useRef(new Map<string, AbortController>());
@@ -70,7 +106,7 @@ export function NewPackage() {
     uploads.current.set(item.key, controller);
     update(item.key, { state: "uploading", loaded: 0, error: undefined });
     draftId()
-      .then((id) => uploadFile(id, item.file, (loaded) => update(item.key, { loaded }), controller.signal))
+      .then((id) => uploadFile(id, item.file, item.name, (loaded) => update(item.key, { loaded }), controller.signal))
       .then((stored) => update(item.key, { state: "done", id: stored.id, loaded: item.file.size }))
       .catch((err) => {
         if (!controller.signal.aborted) update(item.key, { state: "error", error: message(err) });
@@ -96,10 +132,10 @@ export function NewPackage() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [busy]);
 
-  function add(files: FileList | null) {
-    if (!files?.length) return;
+  function add(picked: Picked[]) {
+    if (!picked.length) return;
     setError(null);
-    const added = Array.from(files, (file): Item => ({ key: String(nextKey++), file, state: "queued", loaded: 0 }));
+    const added = picked.map(({ file, name }): Item => ({ key: String(nextKey++), file, name, state: "queued", loaded: 0 }));
     setItems((current) => [...current, ...added]);
     enqueue(added);
   }
@@ -149,7 +185,7 @@ export function NewPackage() {
   function drop(event: DragEvent) {
     event.preventDefault();
     setDragging(false);
-    add(event.dataTransfer.files);
+    dropped(event.dataTransfer).then(add, () => setError("Could not read what was dropped"));
   }
 
   const total = items.reduce((sum, item) => sum + item.file.size, 0);
@@ -211,13 +247,21 @@ export function NewPackage() {
               <DownloadIcon className="h-6 w-6 rotate-180" />
             </span>
             <p className="text-sm text-muted">
-              <span className="hidden sm:inline">Drop files here or </span>
+              <span className="hidden sm:inline">Drop files or folders here, or </span>
               <button
                 type="button"
                 onClick={() => input.current?.click()}
                 className="font-medium text-sky-600 underline-offset-2 hover:underline dark:text-sky-400"
               >
-                choose them
+                choose files
+              </button>
+              {" or "}
+              <button
+                type="button"
+                onClick={() => folderInput.current?.click()}
+                className="font-medium text-sky-600 underline-offset-2 hover:underline dark:text-sky-400"
+              >
+                a folder
               </button>
             </p>
             <input
@@ -226,7 +270,18 @@ export function NewPackage() {
               multiple
               className="hidden"
               onChange={(event) => {
-                add(event.target.files);
+                add(chosen(event.target.files));
+                event.target.value = "";
+              }}
+            />
+            <input
+              ref={folderInput}
+              type="file"
+              // Not in React's types; it makes the picker choose a folder and give every file under it
+              {...{ webkitdirectory: "" }}
+              className="hidden"
+              onChange={(event) => {
+                add(chosen(event.target.files));
                 event.target.value = "";
               }}
             />
@@ -238,8 +293,8 @@ export function NewPackage() {
               {items.map((item) => (
                 <li key={item.key} className="glass flex flex-col gap-2 rounded-2xl px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground" title={item.file.name}>
-                      {item.file.name}
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground" title={item.name}>
+                      {item.name}
                     </span>
                     <span className="shrink-0 text-xs text-muted tabular-nums">
                       {item.state === "uploading"
@@ -251,7 +306,7 @@ export function NewPackage() {
                     <button
                       type="button"
                       onClick={() => remove(item)}
-                      aria-label={`Remove ${item.file.name}`}
+                      aria-label={`Remove ${item.name}`}
                       className="shrink-0 rounded-lg px-1.5 text-muted transition hover:bg-surface-hover hover:text-foreground"
                     >
                       ×

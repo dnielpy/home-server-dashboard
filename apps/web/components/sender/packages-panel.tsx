@@ -262,7 +262,7 @@ function OpenedPackage({ opened, onDeleted }: { opened: Opened; onDeleted: () =>
             ) : (
               <a
                 href={downloadUrl(opened.id, file.id, opened.token)}
-                download={file.name}
+                download={file.name.split("/").pop()}
                 onClick={() => setStarted((current) => new Set(current).add(file.id))}
                 className="inline-flex w-24 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-violet-500/10 px-2.5 py-1 text-xs font-medium text-violet-700 ring-1 ring-violet-500/30 ring-inset transition hover:bg-violet-500/15 dark:text-violet-300"
               >

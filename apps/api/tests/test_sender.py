@@ -159,9 +159,26 @@ def test_downloads_keep_names_with_accents(client, store) -> None:
     assert "filename*=UTF-8''%C3%B1and%C3%BA.txt" in disposition
 
 
+def test_files_keep_their_folder_and_download_with_their_own_name(client, store) -> None:
+    package_id = _package(client, {"Photos/2024/a.jpg": b"abc"})
+    unlocked = client.post(f"/sender/packages/{package_id}/unlock", json={"pin": "1234"}).json()
+    assert unlocked["files"][0]["name"] == "Photos/2024/a.jpg"
+    response = client.get(
+        f"/sender/packages/{package_id}/files/{unlocked['files'][0]['id']}", params={"token": unlocked["token"]}
+    )
+    assert 'filename="a.jpg"' in response.headers["content-disposition"]
+
+
 @pytest.mark.parametrize(
     ("name", "clean"),
-    [("../../etc/passwd", "passwd"), ("C:\\Users\\me\\a.txt", "a.txt"), ("..", "file"), ("a\x00b\n.txt", "ab.txt")],
+    [
+        ("../../etc/passwd", "etc/passwd"),
+        ("C:\\Users\\me\\a.txt", "Users/me/a.txt"),
+        ("..", "file"),
+        ("a\x00b\n.txt", "ab.txt"),
+        ("Photos//2024/./a.jpg", "Photos/2024/a.jpg"),
+        ("/".join("abcdefghij") + ".txt", "c/d/e/f/g/h/i/j.txt"),
+    ],
 )
 def test_file_names_are_cleaned(name, clean) -> None:
     assert clean_file_name(name) == clean
