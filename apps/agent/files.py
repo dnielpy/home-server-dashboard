@@ -1,5 +1,5 @@
 """The external disk's files, for the dashboard's file manager: lists a folder, downloads a file (or a folder as a
-zip), renames, moves, copies (in the background), deletes and creates folders.
+zip), renames, moves, copies and compresses into a zip (both in the background), deletes and creates folders.
 
 Runs in the agent, outside Docker, as the server's user, so it can change the files the apps leave on the disk. Every
 path comes relative to the disk's mount point and is checked to stay inside it, symbolic links included. Docker's
@@ -17,6 +17,7 @@ import time
 import unicodedata
 import uuid
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -29,6 +30,12 @@ PROTECTED = frozenset({"videos", "sender", "downloads", "gallery", "openclaw"})
 # LGallery's folder, which "Move to gallery" empties folders into
 GALLERY = "gallery"
 MAX_NAME_BYTES = 255
+# Already compressed: deflating them again costs the server's CPU and saves nothing, so a zip stores them as they are
+COMPRESSED = frozenset({
+    ".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".ts", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus",
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".avif",
+    ".zip", ".rar", ".7z", ".gz", ".tgz", ".xz", ".bz2", ".zst", ".iso", ".apk", ".jar", ".docx", ".xlsx", ".pptx",
+})
 CHUNK_BYTES = 1024 * 1024
 
 
@@ -300,6 +307,34 @@ class Disk:
             raise FilesError(409, "There is not enough free space on the disk for the copy")
         return path, target, size
 
+    def zip_plan(self, relatives: list[str]) -> tuple[list[Path], Path, int]:
+        """Checks a zip before it starts: what goes in it (all from one folder), the free name it gets in that folder,
+        and the bytes to read. One item gives the zip its name, several the folder's."""
+        unique = list(dict.fromkeys(relatives))
+        if not unique:
+            raise FilesError(400, "Nothing to compress")
+        root = self._root()
+        paths = [self.resolve(relative) for relative in unique]
+        if any(path == root for path in paths):
+            raise FilesError(403, "The whole disk cannot be compressed at once")
+        if len({path.parent for path in paths}) > 1:
+            raise FilesError(400, "What is compressed together has to be in the same folder")
+        missing = next((path for path in paths if not path.exists()), None)
+        if missing is not None:
+            raise FilesError(404, f"There is no {missing.name}")
+        parent = paths[0].parent
+        if not os.access(parent, os.W_OK):
+            raise FilesError(403, "The server's user cannot write in this folder")
+        if len(paths) > 1:
+            name = parent.name if parent != root else "External disk"
+        else:
+            name = paths[0].stem if paths[0].is_file() else paths[0].name
+        target = numbered_name(parent / f"{name}.zip")
+        size = sum(tree_size(path) for path in paths)
+        if size > shutil.disk_usage(root).free:
+            raise FilesError(409, "There is not enough free space on the disk for the zip")
+        return paths, target, size
+
     def mkdir(self, relative: str, name: str) -> dict[str, Any]:
         parent = self.resolve(relative)
         if not parent.is_dir():
@@ -366,13 +401,18 @@ class Cancelled(Exception):
 
 @dataclass
 class Transfer:
-    """A copy running in the background, which the dashboard follows by its id."""
+    """A copy or a zip running in the background, which the dashboard follows by its id."""
 
     id: str
+    # What is copied, or the first of what is compressed, and the copy or the zip it makes
     source: str
     target: str
+    # Bytes to read, and read so far
     total: int
     done: int = 0
+    kind: str = "copy"  # copy or zip
+    # How many items go in a zip
+    count: int = 1
     state: str = "running"  # running, done, failed or cancelled
     error: str | None = None
     started: float = 0.0
@@ -382,7 +422,9 @@ class Transfer:
     def out(self) -> dict[str, Any]:
         return {
             "id": self.id,
+            "kind": self.kind,
             "source": self.source,
+            "count": self.count,
             "target": self.target,
             "total": self.total,
             "done": self.done,
@@ -394,7 +436,8 @@ class Transfer:
 
 
 class Transfers:
-    """The copies started from the dashboard. Finished ones are kept a while, so the page can show how they ended."""
+    """The copies and zips started from the dashboard. Finished ones are kept a while, so the page can show how they
+    ended."""
 
     KEEP_SECONDS = 15 * 60
 
@@ -404,18 +447,30 @@ class Transfers:
 
     def start(self, disk: Disk, relative: str, relative_folder: str) -> dict[str, Any]:
         source, target, size = disk.copy_plan(relative, relative_folder)
+        job = Transfer(id="", source=disk._relative(source), target=disk._relative(target), total=size)
+        return self._begin(job, target, lambda: copy_tree(source, target, job))
+
+    def zip(self, disk: Disk, relatives: list[str]) -> dict[str, Any]:
+        paths, target, size = disk.zip_plan(relatives)
+        job = Transfer(
+            id="",
+            kind="zip",
+            source=disk._relative(paths[0]),
+            count=len(paths),
+            target=disk._relative(target),
+            total=size,
+        )
+        return self._begin(job, target, lambda: zip_into(paths, target, job))
+
+    def _begin(self, job: Transfer, target: Path, work: Callable[[], None]) -> dict[str, Any]:
+        """Adds a job, unless the same one is running, and starts `work` in the background."""
         with self.lock:
-            if any(job.state == "running" and job.target == disk._relative(target) for job in self.jobs.values()):
-                raise FilesError(409, "That copy is already running")
-            job = Transfer(
-                id=uuid.uuid4().hex,
-                source=disk._relative(source),
-                target=disk._relative(target),
-                total=size,
-                started=time.time(),
-            )
+            if any(other.state == "running" and other.target == job.target for other in self.jobs.values()):
+                raise FilesError(409, f"That {job.kind} is already running")
+            job.id = uuid.uuid4().hex
+            job.started = time.time()
             self.jobs[job.id] = job
-        threading.Thread(target=self._run, args=(job, source, target), daemon=True).start()
+        threading.Thread(target=self._run, args=(job, target, work), daemon=True).start()
         return job.out()
 
     def list(self) -> list[dict[str, Any]]:
@@ -430,15 +485,16 @@ class Transfers:
         with self.lock:
             job = self.jobs.get(job_id)
         if job is None:
-            raise FilesError(404, "There is no such copy")
+            raise FilesError(404, "There is no such copy or zip")
         if job.state != "running":
-            raise FilesError(409, "That copy already ended")
+            raise FilesError(409, f"That {job.kind} already ended")
         job.cancel.set()
         return job.out()
 
-    def _run(self, job: Transfer, source: Path, target: Path) -> None:
+    def _run(self, job: Transfer, target: Path, work: Callable[[], None]) -> None:
+        """Runs a copy or zip, deleting what it leaves behind when it is cancelled or fails."""
         try:
-            copy_tree(source, target, job)
+            work()
             job.state = "done"
         except Cancelled:
             job.state = "cancelled"
@@ -475,8 +531,41 @@ def copy_file(source: Path, target: Path, job: Transfer) -> None:
     shutil.copystat(source, target)
 
 
+def zip_into(paths: list[Path], target: Path, job: Transfer) -> None:
+    """Compresses files and folders of one folder into a new zip, leaving out links, counting the bytes read in `job`
+    and stopping when it is cancelled."""
+    # Not strict about timestamps: a file dated before 1980 goes in dated 1980 instead of failing the zip
+    with zipfile.ZipFile(target, "x", zipfile.ZIP_DEFLATED, allowZip64=True, strict_timestamps=False) as archive:
+        for item in paths:
+            if item.is_symlink():
+                continue
+            if item.is_file():
+                zip_file(archive, item, item.name, job)
+                continue
+            for parent, dirs, names in os.walk(item):
+                dirs.sort()
+                folder = Path(parent)
+                # Its own entry, so empty folders are kept
+                archive.write(folder, folder.relative_to(item.parent).as_posix())
+                for name in sorted(names):
+                    file = folder / name
+                    if not file.is_symlink() and file.is_file():
+                        zip_file(archive, file, file.relative_to(item.parent).as_posix(), job)
+
+
+def zip_file(archive: zipfile.ZipFile, file: Path, name: str, job: Transfer) -> None:
+    info = zipfile.ZipInfo.from_file(file, name, strict_timestamps=False)
+    info.compress_type = zipfile.ZIP_STORED if file.suffix.lower() in COMPRESSED else zipfile.ZIP_DEFLATED
+    with file.open("rb") as reader, archive.open(info, "w", force_zip64=True) as writer:
+        while chunk := reader.read(CHUNK_BYTES):
+            if job.cancel.is_set():
+                raise Cancelled
+            writer.write(chunk)
+            job.done += len(chunk)
+
+
 def remove(path: Path) -> None:
-    """Deletes what a copy that did not end left behind."""
+    """Deletes what a copy or zip that did not end left behind."""
     try:
         if path.is_symlink() or path.is_file():
             path.unlink()

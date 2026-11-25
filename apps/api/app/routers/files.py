@@ -135,10 +135,29 @@ async def copy(upstreams: UpstreamsDep, path: FilePath, to: Destination) -> File
     return await files.copy(upstreams.agent, path, to)
 
 
+@router.post(
+    "/zip",
+    response_model=FileTransferOut,
+    responses={
+        **NOT_FOUND,
+        **FORBIDDEN,
+        409: {"description": "There is not enough free space, or the same zip is already being made"},
+        400: {"description": "The paths are not all in the same folder"},
+    },
+    description=(
+        "Starts compressing files and folders of one folder into a zip in that same folder, in the background; "
+        "/transfers follows it. One item gives the zip its name, several the folder's; a name already taken gets "
+        '" (2)". Videos, photos and other compressed files are stored as they are.'
+    ),
+)
+async def zip_(upstreams: UpstreamsDep, path: FilePaths) -> FileTransferOut:
+    return await files.zip_(upstreams.agent, path)
+
+
 @router.get(
     "/transfers",
     response_model=list[FileTransferOut],
-    description="The copies running and those that ended in the last 15 minutes, the newest first.",
+    description="The copies and zips running and those that ended in the last 15 minutes, the newest first.",
 )
 async def transfers(upstreams: UpstreamsDep) -> list[FileTransferOut]:
     return await files.transfers(upstreams.agent)
@@ -147,8 +166,8 @@ async def transfers(upstreams: UpstreamsDep) -> list[FileTransferOut]:
 @router.post(
     "/transfers/{transfer_id}/cancel",
     response_model=FileTransferOut,
-    responses={404: {"description": "There is no such copy"}, 409: {"description": "The copy already ended"}},
-    description="Stops a copy; what it had copied is deleted.",
+    responses={404: {"description": "There is no such copy or zip"}, 409: {"description": "It already ended"}},
+    description="Stops a copy or a zip; what it had written is deleted.",
 )
 async def cancel_transfer(upstreams: UpstreamsDep, transfer_id: TransferId) -> FileTransferOut:
     return await files.cancel_transfer(upstreams.agent, transfer_id)

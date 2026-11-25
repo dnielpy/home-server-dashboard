@@ -802,13 +802,19 @@ def _files_to_gallery(query):
     return on_disk(lambda disk: disk.to_gallery(param(query, "path")))
 
 
-# The copies started from the dashboard, which run in the background
+# The copies and zips started from the dashboard, which run in the background
 TRANSFERS = files.Transfers()
 
 
 @route("POST", "/files/copy")
 def _files_copy(query):
     return on_disk(lambda disk: TRANSFERS.start(disk, param(query, "path"), param(query, "to")))
+
+
+@route("POST", "/files/zip")
+def _files_zip(query):
+    # Several ?path= of one folder go in the same zip
+    return on_disk(lambda disk: TRANSFERS.zip(disk, query.get("path", [""])))
 
 
 @route("GET", "/files/transfers")

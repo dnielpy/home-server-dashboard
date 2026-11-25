@@ -57,6 +57,12 @@ async def copy(upstream: Upstream, path: str, to: str) -> FileTransferOut:
     return FileTransferOut.model_validate(body)
 
 
+async def zip_(upstream: Upstream, paths: list[str]) -> FileTransferOut:
+    # Measuring big folders before starting takes a moment; the zip itself runs in the background
+    body = await _call(upstream, "POST", "/files/zip", timeout=DELETE_TIMEOUT_SECONDS, path=paths)
+    return FileTransferOut.model_validate(body)
+
+
 async def transfers(upstream: Upstream) -> list[FileTransferOut]:
     return [FileTransferOut.model_validate(item) for item in await _call(upstream, "GET", "/files/transfers")]
 

@@ -396,10 +396,13 @@ export type Folder = {
 /** A copy the agent runs in the background (Files › Copy). */
 export type FileTransfer = {
   id: string;
-  /** What is copied and where the copy goes, relative to the disk. */
+  kind: "copy" | "zip";
+  /** What is copied and where the copy goes, or the first of what is compressed and the zip, relative to the disk. */
   source: string;
   target: string;
-  /** Bytes to copy and copied so far. */
+  /** How many items go in a zip. */
+  count: number;
+  /** Bytes to read and read so far. */
   total: number;
   done: number;
   state: "running" | "done" | "failed" | "cancelled";

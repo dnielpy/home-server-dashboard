@@ -23,7 +23,7 @@ type Failure = PickerResult["failures"][number];
 const modifiedFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
 /**
- * A file manager for the external disk: open folders, download, rename, move, copy and delete what is in them, or move it to the gallery, one at
+ * A file manager for the external disk: open folders, download, rename, move, copy, compress and delete what is in them, or move it to the gallery, one at
  * a time or several selected together.
  */
 export function FilesExplorer() {
@@ -35,7 +35,7 @@ export function FilesExplorer() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [creating, setCreating] = useState(false);
-  // The move or copy whose destination is being picked, and a count of the copies started, to read them again
+  // The move or copy whose destination is being picked, and a count of the copies and zips started, to read them again
   const [picking, setPicking] = useState<PickerRequest | null>(null);
   const [copiesStarted, setCopiesStarted] = useState(0);
   // The names checked in this folder, and what an action on them could not do
@@ -123,6 +123,18 @@ export function FilesExplorer() {
     setSelected(new Set(result.failures.map((failure) => failure.name)));
     if (result.copies > 0) setCopiesStarted((count) => count + 1);
     if (result.moved > 0) reload();
+  }
+
+  /** Starts compressing what is given, all of this folder, into one zip next to it; its progress shows above. */
+  async function compress(names: string[]) {
+    setFailures([]);
+    try {
+      await callFiles("/zip", names.map((name) => ["path", join(path, name)]), "POST");
+      setSelected(new Set());
+      setCopiesStarted((count) => count + 1);
+    } catch (err) {
+      setFailures([{ name: names.length === 1 ? names[0] : `${names.length} items`, reason: message(err) }]);
+    }
   }
 
   /** Deletes, or moves to the gallery, each one checked, one after the other. */
@@ -262,6 +274,7 @@ export function FilesExplorer() {
             onPick={(mode) => pick(mode, chosen)}
             onDelete={() => eachChosen("/delete")}
             onGallery={() => eachChosen("/to-gallery")}
+            onCompress={() => compress(chosen.map((entry) => entry.name))}
           />
         )}
         {entries.length > 0 && (
@@ -276,6 +289,7 @@ export function FilesExplorer() {
                 onOpen={open}
                 onChanged={reload}
                 onPick={(mode) => pick(mode, [entry])}
+                onCompress={() => compress([entry.name])}
               />
             ))}
           </ul>
@@ -297,6 +311,7 @@ function SelectionBar({
   onPick,
   onDelete,
   onGallery,
+  onCompress,
 }: {
   folder: string;
   /** The items on screen, which "all" checks. */
@@ -309,6 +324,8 @@ function SelectionBar({
   onDelete: () => Promise<void>;
   /** Moves the files, and what the folders have, into the gallery's top folder. */
   onGallery: () => Promise<void>;
+  /** Compresses the ones checked into one zip in this folder, in the background. */
+  onCompress: () => Promise<void>;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -332,6 +349,12 @@ function SelectionBar({
   async function toGallery() {
     setBusy(true);
     await onGallery();
+    setBusy(false);
+  }
+
+  async function compress() {
+    setBusy(true);
+    await onCompress();
     setBusy(false);
   }
 
@@ -385,6 +408,7 @@ function SelectionBar({
                     href: downloadHref(chosen.map((entry) => join(folder, entry.name))),
                   },
                   { label: "Copy to…", onSelect: () => onPick("copy") },
+                  { label: "Compress to zip", onSelect: compress },
                   {
                     label: "Move to…",
                     onSelect: () => onPick("move"),
@@ -450,6 +474,7 @@ function EntryRow({
   onOpen,
   onChanged,
   onPick,
+  onCompress,
 }: {
   folder: string;
   entry: FileEntry;
@@ -459,6 +484,8 @@ function EntryRow({
   onChanged: () => void;
   /** Opens the folder picker to move or copy it somewhere else on the disk. */
   onPick: (mode: PickerRequest["mode"]) => void;
+  /** Compresses it into a zip next to it, in the background. */
+  onCompress: () => void;
 }) {
   const path = join(folder, entry.name);
   const [renaming, setRenaming] = useState(false);
@@ -578,6 +605,7 @@ function EntryRow({
               actions={[
                 { label: isFolder ? "Download as zip" : "Download", href: downloadHref([path]) },
                 { label: "Copy to…", onSelect: () => onPick("copy") },
+                { label: "Compress to zip", onSelect: onCompress },
                 { label: "Move to…", onSelect: () => onPick("move"), disabled: entry.protected, hint: appFolder },
                 { label: "Move to gallery", onSelect: toGallery, disabled: entry.protected, hint: appFolder },
                 { label: "Rename", onSelect: () => setRenaming(true), disabled: entry.protected, hint: appFolder },

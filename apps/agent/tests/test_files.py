@@ -251,6 +251,66 @@ def test_a_cancelled_or_failed_copy_leaves_nothing(disk: files.Disk, monkeypatch
     assert not (disk.root / "videos" / "notes").exists()
 
 
+def test_compresses_into_a_zip_next_to_what_goes_in_it(disk: files.Disk) -> None:
+    transfers = files.Transfers()
+    (disk.root / "notes" / "empty").mkdir()
+    job = transfers.zip(disk, ["notes"])
+    assert (job["kind"], job["target"], job["count"]) == ("zip", "notes.zip", 1)
+    assert job["total"] == len("hello") + len("world")
+    done = wait(transfers, job["id"])
+    assert done["state"] == "done" and done["done"] == done["total"]
+    with zipfile.ZipFile(disk.root / "notes.zip") as archive:
+        assert sorted(archive.namelist()) == [
+            "notes/", "notes/a.txt", "notes/empty/", "notes/inner/", "notes/inner/b.txt",
+        ]
+        assert archive.read("notes/inner/b.txt") == b"world"
+        assert archive.getinfo("notes/a.txt").compress_type == zipfile.ZIP_DEFLATED
+
+    # A file is named without its extension, and a taken name gets " (2)"
+    assert transfers.zip(disk, ["videos/clip.mp4"])["target"] == "videos/clip.zip"
+    wait(transfers, transfers.list()[0]["id"])
+    with zipfile.ZipFile(disk.root / "videos" / "clip.zip") as archive:
+        assert archive.getinfo("clip.mp4").compress_type == zipfile.ZIP_STORED
+    several = transfers.zip(disk, ["notes/a.txt", "notes/inner"])
+    assert (several["target"], several["count"]) == ("notes/notes.zip", 2)
+    wait(transfers, several["id"])
+    assert transfers.zip(disk, ["notes"])["target"] == "notes (2).zip"
+    wait(transfers, transfers.list()[0]["id"])
+    with zipfile.ZipFile(disk.root / "notes" / "notes.zip") as archive:
+        assert sorted(archive.namelist()) == ["a.txt", "inner/", "inner/b.txt"]
+
+
+def test_zip_refuses_the_disk_other_folders_and_a_full_disk(disk: files.Disk, monkeypatch: pytest.MonkeyPatch) -> None:
+    transfers = files.Transfers()
+    assert error(lambda: transfers.zip(disk, [])).status == 400
+    assert error(lambda: transfers.zip(disk, [""])).status == 403
+    assert error(lambda: transfers.zip(disk, ["notes/a.txt", "Zebra.txt"])).status == 400
+    assert error(lambda: transfers.zip(disk, ["nope"])).status == 404
+    usage = files.shutil.disk_usage(disk.root)
+    monkeypatch.setattr(files.shutil, "disk_usage", lambda _: usage._replace(free=3))
+    assert error(lambda: transfers.zip(disk, ["notes"])).status == 409
+
+
+def test_a_cancelled_zip_leaves_nothing(disk: files.Disk, monkeypatch: pytest.MonkeyPatch) -> None:
+    transfers = files.Transfers()
+    started = threading.Event()
+    release = threading.Event()
+    real_zip_file = files.zip_file
+
+    def slow_zip_file(archive, file, name, job):
+        started.set()
+        release.wait(5)
+        real_zip_file(archive, file, name, job)
+
+    monkeypatch.setattr(files, "zip_file", slow_zip_file)
+    job = transfers.zip(disk, ["notes"])
+    started.wait(5)
+    transfers.cancel(job["id"])
+    release.set()
+    assert wait(transfers, job["id"])["state"] == "cancelled"
+    assert not (disk.root / "notes.zip").exists()
+
+
 def test_agent_moves_and_copies(disk: files.Disk, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(agent, "external_disk", lambda: disk)
     monkeypatch.setattr(agent, "TRANSFERS", files.Transfers())
@@ -267,8 +327,11 @@ def test_agent_moves_and_copies(disk: files.Disk, monkeypatch: pytest.MonkeyPatc
         job = post("/files/copy?path=notes&to=videos")
         assert job["state"] == "running" and job["target"] == "videos/notes"
         assert wait(agent.TRANSFERS, job["id"])["state"] == "done"
+        zipping = post("/files/zip?path=notes/a.txt&path=notes/inner")
+        assert zipping["kind"] == "zip" and zipping["target"] == "notes/notes.zip"
+        assert wait(agent.TRANSFERS, zipping["id"])["state"] == "done"
         with urllib.request.urlopen(f"{base}/files/transfers") as response:
-            assert [j["id"] for j in json.load(response)] == [job["id"]]
+            assert [j["id"] for j in json.load(response)] == [zipping["id"], job["id"]]
         with pytest.raises(urllib.error.HTTPError) as caught:
             post(f"/files/transfers/{job['id']}/cancel")
         assert caught.value.code == 409

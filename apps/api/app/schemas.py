@@ -371,13 +371,17 @@ class FilePathOut(BaseModel):
 
 
 class FileTransferOut(BaseModel):
-    """A copy the agent runs in the background."""
+    """A copy or a zip the agent runs in the background."""
 
     id: str
-    # Relative to the disk: what is copied, and where the copy goes (with "(copy)" when the name was taken)
+    kind: Literal["copy", "zip"] = "copy"
+    # Relative to the disk: what is copied, and where the copy goes (with "(copy)" when the name was taken); or the
+    # first of what is compressed, and the zip it makes next to it
     source: str
     target: str
-    # Bytes to copy and copied so far
+    # How many items go in a zip
+    count: int = 1
+    # Bytes to read and read so far
     total: int
     done: int
     state: Literal["running", "done", "failed", "cancelled"]

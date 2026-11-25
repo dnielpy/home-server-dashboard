@@ -12,15 +12,19 @@ import { BUTTON, BUTTON_TONES, callFiles, message } from "./files-client";
 // How often the copies are read while one runs
 const POLL_MS = 1_000;
 
-const STATES: Record<FileTransfer["state"], string> = {
-  running: "Copying",
-  done: "Copied",
-  failed: "Failed",
-  cancelled: "Cancelled",
+const STATES: Record<FileTransfer["kind"], Record<FileTransfer["state"], string>> = {
+  copy: { running: "Copying", done: "Copied", failed: "Failed", cancelled: "Cancelled" },
+  zip: { running: "Compressing", done: "Compressed", failed: "Failed", cancelled: "Cancelled" },
 };
 
+/** What a job works on: the name copied, or what goes in a zip. */
+function subject(transfer: FileTransfer): string {
+  const name = transfer.source.split("/").at(-1) ?? "";
+  return transfer.kind === "zip" && transfer.count > 1 ? `${transfer.count} items` : name;
+}
+
 /**
- * The copies running in the background, with their progress, and how the recent ones ended. Reads them on mount and
+ * The copies and zips running in the background, with their progress, and how the recent ones ended. Reads them on mount and
  * whenever `started` changes, then every second while one runs; `onFinished` is called when one ends.
  */
 export function Transfers({ started, onFinished }: { started: number; onFinished: () => void }) {
@@ -79,14 +83,15 @@ export function Transfers({ started, onFinished }: { started: number; onFinished
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
               <span className="min-w-0 flex-1 basis-48">
                 <span className="block truncate font-medium" title={transfer.source}>
-                  {STATES[transfer.state]} {transfer.source.split("/").at(-1)}
+                  {STATES[transfer.kind][transfer.state]} {subject(transfer)}
                 </span>
                 <span className="block truncate text-xs text-muted" title={transfer.target}>
-                  to /{transfer.target}
+                  {transfer.kind === "zip" ? "into" : "to"} /{transfer.target}
                 </span>
               </span>
               <span className="text-xs text-muted tabular-nums">
-                {formatBytes(transfer.done)} of {formatBytes(transfer.total)}
+                {isRunning && `${Math.min(100, Math.floor(percent))}% · `}
+                {formatBytes(Math.min(transfer.done, transfer.total))} of {formatBytes(transfer.total)}
               </span>
               {isRunning ? (
                 <button type="button" onClick={() => cancel(transfer.id)} className={`${BUTTON} ${BUTTON_TONES.red}`}>

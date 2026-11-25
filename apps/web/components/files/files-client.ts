@@ -14,7 +14,8 @@ export class FilesRequestError extends Error {}
 
 export async function callFiles<T>(
   action: string,
-  params: Record<string, string>,
+  /** Pairs repeat a name, as several paths. */
+  params: Record<string, string> | [string, string][],
   method: "GET" | "POST" = "GET",
 ): Promise<T> {
   let response: Response;

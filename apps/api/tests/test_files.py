@@ -86,6 +86,8 @@ def test_download_refused(client, upstreams) -> None:
 
 TRANSFER = {
     "id": "a" * 32,
+    "kind": "copy",
+    "count": 1,
     "source": "notes",
     "target": "videos/notes",
     "total": 10,
@@ -116,6 +118,15 @@ def test_moves_and_copies(client, upstreams) -> None:
     assert client.post("/files/transfers/nope/cancel").status_code == 422
     assert client.post("/files/move", params={"path": "a"}).status_code == 422
     assert client.post("/files/to-gallery", params={"path": "album"}).json() == {"path": "gallery"}
+
+
+def test_zips(client, upstreams) -> None:
+    zipping = {**TRANSFER, "kind": "zip", "count": 2, "target": "notes/notes.zip"}
+    calls = upstreams(agent={"/files/zip": zipping})
+    response = client.post("/files/zip", params=[("path", "notes/a.txt"), ("path", "notes/inner")])
+    assert response.json() == zipping
+    assert calls[0].url.params.get_list("path") == ["notes/a.txt", "notes/inner"]
+    assert client.post("/files/zip").status_code == 422
 
 
 def test_move_and_copy_refusals_pass_through(client, upstreams) -> None:
