@@ -19,6 +19,7 @@ import uuid
 import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from email.utils import formatdate, parsedate_to_datetime
 from pathlib import Path
 from typing import Any, BinaryIO
 from urllib.parse import quote
@@ -48,7 +49,12 @@ class FilesError(Exception):
 
 @dataclass
 class Download:
-    """A file to stream to the dashboard: a file as it is, or a folder zipped on the fly (size None)."""
+    """A file to stream to the dashboard: a file as it is, or a folder zipped on the fly (size None).
+
+    A file can be downloaded in parts (HTTP Range), so a browser can pause a download and resume it, or pick it up
+    where it was after the connection drops. Its ETag and Last-Modified tell the browser whether the file is still the
+    one it started with. A zip made on the fly has no size up front and cannot be resumed: zip the folder first
+    (Compress) and download that file instead."""
 
     path: Path
     name: str
@@ -56,6 +62,17 @@ class Download:
     content_type: str
     # The other files and folders of the same folder that go in the zip next to `path`
     others: tuple[Path, ...] = ()
+    # When the file last changed, and the strong validator made from it; None for a zip
+    modified: float | None = None
+    etag: str | None = None
+    # The bytes asked for with Range, inclusive; None for the whole file
+    part: tuple[int, int] | None = None
+
+    @property
+    def length(self) -> int | None:
+        if self.part is not None:
+            return self.part[1] - self.part[0] + 1
+        return self.size
 
     def headers(self) -> dict[str, str]:
         ascii_name = unicodedata.normalize("NFKD", self.name).encode("ascii", "ignore").decode().replace('"', "'")
@@ -65,15 +82,51 @@ class Download:
                 f"attachment; filename=\"{ascii_name or 'download'}\"; filename*=UTF-8''{quote(self.name, safe='')}"
             ),
             "Cache-Control": "no-store",
+            "Accept-Ranges": "bytes" if self.size is not None else "none",
         }
         if self.size is not None:
-            headers["Content-Length"] = str(self.size)
+            headers["Content-Length"] = str(self.length)
+        if self.part is not None:
+            headers["Content-Range"] = f"bytes {self.part[0]}-{self.part[1]}/{self.size}"
+        if self.etag is not None:
+            headers["ETag"] = self.etag
+        if self.modified is not None:
+            headers["Last-Modified"] = formatdate(self.modified, usegmt=True)
         return headers
+
+    def ranged(self, range_header: str | None, if_range: str | None = None) -> Download:
+        """This download, or only the part a Range header asks for. Raises 416 for a range past the end."""
+        if self.size is None or not range_header:
+            return self
+        # If-Range: a part only of the same file the browser started with, else the whole file again
+        if if_range and not self._validates(if_range.strip()):
+            return self
+        part = parse_range(range_header, self.size)
+        if part is None:
+            return self
+        return Download(self.path, self.name, self.size, self.content_type, self.others, self.modified, self.etag, part)
+
+    def _validates(self, validator: str) -> bool:
+        if validator.startswith(('"', "W/")):
+            return validator == self.etag
+        if self.modified is None:
+            return False
+        try:
+            return int(parsedate_to_datetime(validator).timestamp()) == int(self.modified)
+        except (TypeError, ValueError):
+            return False
 
     def write(self, out: BinaryIO) -> None:
         if self.size is not None:
+            start, left = (self.part[0], self.length) if self.part is not None else (0, self.size)
             with self.path.open("rb") as source:
-                shutil.copyfileobj(source, out, CHUNK_BYTES)
+                source.seek(start)
+                while left > 0:
+                    chunk = source.read(min(CHUNK_BYTES, left))
+                    if not chunk:
+                        break  # The file got shorter while downloading; the browser sees it cut and can retry
+                    out.write(chunk)
+                    left -= len(chunk)
             return
         # Stored, not compressed: the disk is mostly videos and photos, which do not get smaller
         with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED, allowZip64=True) as archive:
@@ -87,6 +140,37 @@ class Download:
                     except OSError:
                         # A file it cannot read is left out rather than ending the download halfway
                         continue
+
+
+def parse_range(header: str, size: int) -> tuple[int, int] | None:
+    """The inclusive bytes of a single "bytes=" range, None when it is not one this serves (the whole file goes then),
+    or a 416 FilesError when it starts past the end."""
+    unit, _, spec = header.strip().partition("=")
+    if unit.strip().lower() != "bytes" or "," in spec:
+        return None  # Another unit, or several ranges: answering the whole file is allowed
+    first, dash, last = spec.strip().partition("-")
+    first, last = first.strip(), last.strip()
+    if not dash or not (first or last) or (first and not first.isdigit()) or (last and not last.isdigit()):
+        return None
+    if not first:
+        # The last N bytes
+        count = int(last)
+        if count == 0:
+            raise RangeNotSatisfiable(size)
+        return max(size - count, 0), size - 1
+    start = int(first)
+    end = min(int(last), size - 1) if last else size - 1
+    if start >= size:
+        raise RangeNotSatisfiable(size)
+    if end < start:
+        return None
+    return start, end
+
+
+class RangeNotSatisfiable(FilesError):
+    def __init__(self, size: int) -> None:
+        super().__init__(416, "The range starts past the end of the file")
+        self.size = size
 
 
 def walk_files(folder: Path):
@@ -181,11 +265,13 @@ class Disk:
         if not path.is_file():
             raise FilesError(404, "There is no such file")
         try:
-            size = path.stat().st_size
+            info = path.stat()
             path.open("rb").close()
         except PermissionError:
             raise FilesError(403, "The server's user cannot read this file")
-        return Download(path, path.name, size, "application/octet-stream")
+        # Changes when the file is replaced, rewritten or resized, so a resumed download never mixes two files
+        etag = f'"{info.st_ino:x}-{info.st_size:x}-{info.st_mtime_ns:x}"'
+        return Download(path, path.name, info.st_size, "application/octet-stream", modified=info.st_mtime, etag=etag)
 
     def download_many(self, relatives: list[str]) -> Download:
         """Several files and folders of one folder in one zip, named after that folder."""

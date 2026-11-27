@@ -63,6 +63,49 @@ def test_streams_a_download_with_its_headers(client, upstreams) -> None:
     assert response.headers["content-disposition"] == disposition
 
 
+def test_a_download_resumes_with_range(client, upstreams) -> None:
+    calls = upstreams(
+        agent={
+            "/files/download": httpx.Response(
+                206,
+                stream=httpx.ByteStream(b"llo"),
+                headers={
+                    "Content-Type": "application/octet-stream",
+                    "Content-Length": "3",
+                    "Content-Range": "bytes 2-4/5",
+                    "Accept-Ranges": "bytes",
+                    "ETag": '"1-5-9"',
+                    "Last-Modified": "Fri, 27 Nov 2026 22:00:00 GMT",
+                },
+            )
+        }
+    )
+    response = client.get(
+        "/files/download", params={"path": "notes/a.txt"}, headers={"Range": "bytes=2-", "If-Range": '"1-5-9"'}
+    )
+    assert response.status_code == 206
+    assert response.content == b"llo"
+    assert response.headers["content-range"] == "bytes 2-4/5"
+    assert response.headers["accept-ranges"] == "bytes"
+    assert response.headers["etag"] == '"1-5-9"'
+    assert response.headers["last-modified"] == "Fri, 27 Nov 2026 22:00:00 GMT"
+    assert calls[0].headers["range"] == "bytes=2-"
+    assert calls[0].headers["if-range"] == '"1-5-9"'
+
+
+def test_a_range_past_the_end(client, upstreams) -> None:
+    upstreams(
+        agent={
+            "/files/download": httpx.Response(
+                416, json={"detail": "The range starts past the end of the file"}, headers={"Content-Range": "bytes */5"}
+            )
+        }
+    )
+    response = client.get("/files/download", params={"path": "notes/a.txt"}, headers={"Range": "bytes=9-"})
+    assert response.status_code == 416
+    assert response.headers["content-range"] == "bytes */5"
+
+
 def test_downloads_several_paths_in_one_zip(client, upstreams) -> None:
     calls = upstreams(
         agent={

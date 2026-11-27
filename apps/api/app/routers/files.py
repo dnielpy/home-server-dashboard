@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Path, Query, Request
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
@@ -27,8 +27,19 @@ TransferId = Annotated[str, Path(pattern=r"^[0-9a-f]{32}$")]
 NOT_FOUND = {404: {"description": "There is no such file or folder"}}
 FORBIDDEN = {403: {"description": "It is outside the disk, an app's folder, or the server's user cannot change it"}}
 TAKEN = {409: {"description": "There is already something with that name"}}
-# The headers of the agent's answer that make the browser save the file
-DOWNLOAD_HEADERS = ("Content-Type", "Content-Length", "Content-Disposition", "Cache-Control")
+# The headers of the agent's answer that make the browser save the file, and resume it after a pause or an error
+DOWNLOAD_HEADERS = (
+    "Content-Type",
+    "Content-Length",
+    "Content-Disposition",
+    "Cache-Control",
+    "Accept-Ranges",
+    "Content-Range",
+    "ETag",
+    "Last-Modified",
+)
+# The browser's headers that ask for only the rest of a file
+RANGE_HEADERS = ("Range", "If-Range")
 
 
 @router.get(
@@ -41,19 +52,29 @@ async def folder(upstreams: UpstreamsDep, path: FilePath = "") -> FolderOut:
     return await files.folder(upstreams.agent, path)
 
 
-@router.get(
+@router.api_route(
     "/download",
-    responses={**NOT_FOUND, **FORBIDDEN, 200: {"content": {"application/octet-stream": {}, "application/zip": {}}}},
+    methods=["GET", "HEAD"],
+    responses={
+        **NOT_FOUND,
+        **FORBIDDEN,
+        200: {"content": {"application/octet-stream": {}, "application/zip": {}}},
+        206: {"description": "The part of the file a Range header asked for"},
+        416: {"description": "The range starts past the end of the file"},
+    },
     response_class=StreamingResponse,
     description=(
         "Downloads a file as it is, or a folder as a zip made while it downloads. Several paths of one folder "
-        "download together in one zip."
+        "download together in one zip. A file can be downloaded in parts (Range, If-Range), so a paused or broken "
+        "download resumes where it was; a zip made on the fly cannot."
     ),
 )
-async def download(upstreams: UpstreamsDep, path: FilePaths) -> StreamingResponse:
-    response = await files.open_download(upstreams.agent, path)
+async def download(request: Request, upstreams: UpstreamsDep, path: FilePaths) -> StreamingResponse:
+    asked = {name: request.headers[name] for name in RANGE_HEADERS if name in request.headers}
+    response = await files.open_download(upstreams.agent, path, method=request.method, headers=asked)
     return StreamingResponse(
         response.aiter_raw(),
+        status_code=response.status_code,
         headers={name: response.headers[name] for name in DOWNLOAD_HEADERS if name in response.headers},
         background=BackgroundTask(response.aclose),
     )

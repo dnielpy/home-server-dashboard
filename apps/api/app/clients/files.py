@@ -72,9 +72,14 @@ async def cancel_transfer(upstream: Upstream, transfer_id: str) -> FileTransferO
     return FileTransferOut.model_validate(body)
 
 
-async def open_download(upstream: Upstream, paths: list[str]) -> httpx.Response:
-    """The agent's answer to a download, still streaming; the caller closes it."""
-    request = upstream.http.build_request("GET", "/files/download", params={"path": paths}, timeout=DOWNLOAD_TIMEOUT)
+async def open_download(
+    upstream: Upstream, paths: list[str], method: str = "GET", headers: dict[str, str] | None = None
+) -> httpx.Response:
+    """The agent's answer to a download, still streaming; the caller closes it. `headers` carries the browser's Range
+    and If-Range, so a paused or broken download resumes where it was."""
+    request = upstream.http.build_request(
+        method, "/files/download", params={"path": paths}, headers=headers, timeout=DOWNLOAD_TIMEOUT
+    )
     try:
         response = await upstream.http.send(request, stream=True)
     except httpx.HTTPError as err:
@@ -89,4 +94,8 @@ async def open_download(upstream: Upstream, paths: list[str]) -> httpx.Response:
         detail = response.text[:200]
     if response.status_code in PASSED_THROUGH:
         raise HTTPException(status_code=response.status_code, detail=detail)
+    if response.status_code == 416:
+        # A range past the end: the browser reads the file's size from Content-Range and starts again
+        content_range = response.headers.get("Content-Range")
+        raise HTTPException(status_code=416, detail=detail, headers={"Content-Range": content_range} if content_range else None)
     raise UpstreamError(upstream.source, f"{upstream.source} answered {response.status_code}: {detail}")

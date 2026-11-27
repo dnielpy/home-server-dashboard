@@ -128,6 +128,44 @@ def test_downloads_several_entries_of_a_folder_in_one_zip(disk: files.Disk) -> N
     assert error(lambda: disk.download_many([])).status == 400
 
 
+def test_a_file_downloads_in_parts_so_it_can_resume(disk: files.Disk) -> None:
+    whole = disk.download("notes/a.txt")
+    headers = whole.headers()
+    assert headers["Accept-Ranges"] == "bytes"
+    assert headers["ETag"].startswith('"') and headers["Last-Modified"].endswith("GMT")
+
+    def part(range_header: str, if_range: str | None = None) -> tuple[bytes, dict[str, str]]:
+        download = whole.ranged(range_header, if_range)
+        out = io.BytesIO()
+        download.write(out)
+        return out.getvalue(), download.headers()
+
+    body, headers = part("bytes=2-")
+    assert body == b"llo"
+    assert headers["Content-Range"] == "bytes 2-4/5" and headers["Content-Length"] == "3"
+    assert part("bytes=1-2")[0] == b"el"
+    assert part("bytes=-2")[0] == b"lo"
+    assert part("bytes=3-99")[0] == b"lo"
+    # Same file: the part; another one (or a bad range): the whole file again
+    assert part("bytes=2-", whole.etag)[0] == b"llo"
+    assert part("bytes=2-", headers["Last-Modified"])[0] == b"llo"
+    assert part("bytes=2-", '"other"')[0] == b"hello"
+    assert part("bytes=0-1,3-4")[0] == b"hello"
+    assert part("items=2-")[0] == b"hello"
+    assert part("bytes=abc")[0] == b"hello"
+    assert error(lambda: whole.ranged("bytes=5-")).status == 416
+    # A zip made on the fly has no size, so it is not resumable
+    folder = disk.download("notes")
+    assert folder.headers()["Accept-Ranges"] == "none"
+    assert folder.ranged("bytes=2-") is folder
+
+
+def test_the_etag_changes_with_the_file(disk: files.Disk) -> None:
+    before = disk.download("notes/a.txt").etag
+    (disk.root / "notes" / "a.txt").write_text("hello again")
+    assert disk.download("notes/a.txt").etag != before
+
+
 def test_content_disposition_keeps_non_ascii_names() -> None:
     headers = files.Download(Path("x"), "canción ñ.mp4", 1, "application/octet-stream").headers()
     assert 'filename="cancion n.mp4"' in headers["Content-Disposition"]
@@ -146,6 +184,19 @@ def test_agent_serves_the_files(disk: files.Disk, monkeypatch: pytest.MonkeyPatc
             assert response.headers["Content-Type"] == "application/zip"
             with zipfile.ZipFile(io.BytesIO(response.read())) as archive:
                 assert "notes/a.txt" in archive.namelist()
+        ranged = urllib.request.Request(f"{base}/files/download?path=notes%2Fa.txt", headers={"Range": "bytes=1-"})
+        with urllib.request.urlopen(ranged) as response:
+            assert response.status == 206
+            assert response.headers["Content-Range"] == "bytes 1-4/5"
+            assert response.read() == b"ello"
+        head = urllib.request.Request(f"{base}/files/download?path=notes%2Fa.txt", method="HEAD")
+        with urllib.request.urlopen(head) as response:
+            assert response.headers["Content-Length"] == "5" and response.read() == b""
+        with pytest.raises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(
+                urllib.request.Request(f"{base}/files/download?path=notes%2Fa.txt", headers={"Range": "bytes=9-"})
+            )
+        assert caught.value.code == 416 and caught.value.headers["Content-Range"] == "bytes */5"
         request = urllib.request.Request(f"{base}/files/rename?path=notes%2Fa.txt&name=c.txt", method="POST")
         with urllib.request.urlopen(request) as response:
             assert json.load(response) == {"path": "notes/c.txt"}

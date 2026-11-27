@@ -840,9 +840,11 @@ class Handler(BaseHTTPRequestHandler):
     def _handle(self, method: str) -> None:
         url = urlparse(self.path)
         status, body = 404, {"detail": "Not Found"}
+        # A HEAD is a GET without the body: download managers ask it for the size before downloading in parts
+        head = method == "HEAD"
         for route_method, pattern, handler in ROUTES:
             match = pattern.match(url.path)
-            if match and route_method == method:
+            if match and route_method == ("GET" if head else method):
                 try:
                     status, body = 200, handler(parse_qs(url.query), **match.groupdict())
                 except HttpError as err:
@@ -850,31 +852,47 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception as err:  # noqa: BLE001 - the dashboard shows it instead of a dropped connection
                     status, body = 500, {"detail": f"{type(err).__name__}: {err}"}
                 break
+        extra: dict[str, str] = {}
         if isinstance(body, files.Download):
-            self._stream(body)
-            return
+            try:
+                body = body.ranged(self.headers.get("Range"), self.headers.get("If-Range"))
+            except files.RangeNotSatisfiable as err:
+                status, body = 416, {"detail": err.detail}
+                extra["Content-Range"] = f"bytes */{err.size}"
+            else:
+                self._stream(body, head)
+                return
         data = json.dumps(body).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
+        for name, value in extra.items():
+            self.send_header(name, value)
         self.end_headers()
-        self.wfile.write(data)
+        if not head:
+            self.wfile.write(data)
 
-    def _stream(self, download: files.Download) -> None:
-        self.send_response(200)
+    def _stream(self, download: files.Download, head: bool = False) -> None:
+        # 206 for a part of a file asked with Range, so the browser resumes where it was
+        self.send_response(206 if download.part is not None else 200)
         for name, value in download.headers().items():
             self.send_header(name, value)
         # A zip has no length up front: the end of the connection ends it
         self.send_header("Connection", "close")
         self.end_headers()
+        self.close_connection = True
+        if head:
+            return
         try:
             download.write(self.wfile)
         except (BrokenPipeError, ConnectionResetError):
-            pass  # The download was cancelled
-        self.close_connection = True
+            pass  # The download was paused or cancelled; a Range request picks it up again
 
     def do_GET(self) -> None:  # noqa: N802
         self._handle("GET")
+
+    def do_HEAD(self) -> None:  # noqa: N802
+        self._handle("HEAD")
 
     def do_POST(self) -> None:  # noqa: N802
         self._handle("POST")
